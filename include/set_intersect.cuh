@@ -7,7 +7,7 @@ __forceinline__ __device__ T intersect_bs(T* a, T size_a, T* b, T size_b, T* c) 
   if (size_a == 0 || size_b == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   T* lookup = a;
   T* search = b;
   T lookup_size = size_a;
@@ -40,7 +40,7 @@ __forceinline__ __device__ T intersect_bs_cache(T* a, T size_a, T* b, T size_b, 
   if (size_a == 0 || size_b == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   vidType *lookup = a;
   vidType *search = b;
   vidType lookup_size = size_a;
@@ -74,7 +74,7 @@ __forceinline__ __device__ T intersect_bs_cache(T* a, T size_a, T* b, T size_b, 
   //if (size_a == 0 || size_b == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   __shared__ T cache[BLOCK_SIZE];
   T* lookup = a;
   T* search = b;
@@ -118,7 +118,7 @@ __forceinline__ __device__ T intersect_bs(T* a, T size_a, T* b, T size_b, T uppe
   if (size_a == 0 || size_b == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   T* lookup = a;
   T* search = b;
   T lookup_size = size_a;
@@ -153,7 +153,7 @@ __forceinline__ __device__ T intersect_bs_cache(T* a, T size_a, T* b, T size_b, 
   if (size_a == 0 || size_b == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   __shared__ T cache[BLOCK_SIZE];
   T* lookup = a;
   T* search = b;

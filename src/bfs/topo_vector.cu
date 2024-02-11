@@ -85,7 +85,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	const int nSM = deviceProp.multiProcessorCount;
 	const int max_blocks_per_SM = maximum_residency(bfs_kernel, nthreads, 0);
 	const int max_blocks = max_blocks_per_SM * nSM;
-	int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
+	int nblocks = std::min(max_blocks, DIVIDE_INTO(m, _WARPS_PER_BLOCK));
 	//int h_frontier_size = 1;
 	initialize <<<mblocks, nthreads>>> (m, source, d_visited, d_expanded);
 	CudaTest("initializing failed");

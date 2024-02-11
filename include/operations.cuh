@@ -40,7 +40,7 @@ __forceinline__ __device__ void warp_load_mem_to_shm(vidType* from, vidType* to,
 __forceinline__ __device__ int list_smaller(vidType bound, vidType *in, vidType size_in, vidType *out) {
   int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
-  __shared__ int count[WARPS_PER_BLOCK];
+  __shared__ int count[_WARPS_PER_BLOCK];
   if (thread_lane == 0) count[warp_lane] = 0;
   __syncwarp();
   for (auto i = thread_lane; i < size_in; i += WARP_SIZE) {
@@ -62,9 +62,9 @@ __forceinline__ __device__ unsigned count_smaller(vidType bound, vidType *a, vid
   if (size_a == 0) return 0;
   unsigned thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
   unsigned warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
-  __shared__ unsigned count[WARPS_PER_BLOCK];
-  __shared__ unsigned begin[WARPS_PER_BLOCK];
-  __shared__ unsigned end[WARPS_PER_BLOCK];
+  __shared__ unsigned count[_WARPS_PER_BLOCK];
+  __shared__ unsigned begin[_WARPS_PER_BLOCK];
+  __shared__ unsigned end[_WARPS_PER_BLOCK];
   if (thread_lane == 0) {
     count[warp_lane] = 0;
     begin[warp_lane] = 0;
@@ -143,7 +143,7 @@ __forceinline__ __device__ T intersect_merge(T* a, T size_a, T* b, T size_b, T* 
   int thread_lane = threadIdx.x & (WARP_SIZE-1);
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the cta
   int p = warp_lane * WARP_SIZE;
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   __shared__ T cache[BLOCK_SIZE];
   if (thread_lane == 0) count[warp_lane] = 0;
   auto a_off = thread_lane; 
@@ -312,7 +312,7 @@ __forceinline__ __device__ T intersect_warp_hindex(T *a, T size_a, T *b, T size_
     lookup_size = size_b;
     search_size = size_a;
   }
-  //__shared__ vidType max_vid[WARPS_PER_BLOCK];
+  //__shared__ vidType max_vid[_WARPS_PER_BLOCK];
   //max_vid[warp_lane] = lookup[lookup_size-1];
 
   // hash the shorter set

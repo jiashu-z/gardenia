@@ -75,7 +75,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	nitems = in_frontier->nitems();
 	do {
 		++ iter;
-		int nblocks = std::min(max_blocks, DIVIDE_INTO(nitems, WARPS_PER_BLOCK));
+		int nblocks = std::min(max_blocks, DIVIDE_INTO(nitems, _WARPS_PER_BLOCK));
 		//printf("iteration %d: frontier_size = %d\n", iter, nitems);
 		bfs_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, d_dist, iter, *in_frontier, *out_frontier);
 		CudaTest("solving failed");

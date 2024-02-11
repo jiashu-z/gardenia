@@ -3,8 +3,8 @@ PAPI_HOME=/usr/local/papi-6.0.0
 ICC_HOME=/opt/intel/compilers_and_libraries/linux/bin/intel64
 GEM5_HOME=/home/cxh/gem5
 MKLROOT=/opt/intel/mkl
-CUB_DIR=../../cub
-OCL_DIR=/usr/local/cuda-11.5/targets/x86_64-linux/lib/
+CUB_DIR=/usr/local/cuda/targets/x86_64-linux/include/cub
+B40_DIR=../../back40computing-read-only
 BIN=../../bin
 HOST=X86
 ifeq ($(HOST),X86)
@@ -18,12 +18,9 @@ ICC=$(ICC_HOME)/icc
 ICPC=$(ICC_HOME)/icpc
 NVCC=nvcc
 #NVCC=$(CUDA_HOME)/bin/nvcc
-COMPUTECAPABILITY=sm_60
-CUDA_ARCH := \
-	-gencode arch=compute_37,code=sm_37 \
-	-gencode arch=compute_61,code=sm_61 \
-	-gencode arch=compute_70,code=sm_70
-CXXFLAGS=-Wall -fopenmp -std=c++11
+COMPUTECAPABILITY=sm_80
+CUDA_ARCH := -gencode arch=compute_80,code=sm_80
+CXXFLAGS=-Wall -fopenmp -std=c++14
 ICPCFLAGS=-O3 -Wall -qopenmp
 NVFLAGS=$(CUDA_ARCH)
 #NVFLAGS+=-Xptxas -v
@@ -69,5 +66,3 @@ INCLUDES+=-I$(GEM5_HOME)/include
 LIBS += -pthread -lrt -ldl
 endif
 
-VPATH += ../common
-OBJS=main.o VertexSet.o graph.o

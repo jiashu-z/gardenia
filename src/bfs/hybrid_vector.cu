@@ -135,7 +135,7 @@ void BFSSolver(int m, int nnz, int source, int *in_row_offsets, int *in_column_i
 	const int nSM = deviceProp.multiProcessorCount;
 	const int max_blocks_per_SM = maximum_residency(bottom_up_warp, nthreads, 0);
 	const int max_blocks = max_blocks_per_SM * nSM;
-	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, WARPS_PER_BLOCK));
+	const int nblocks = std::min(max_blocks, DIVIDE_INTO(m, _WARPS_PER_BLOCK));
 #else
 	const int nblocks = (m - 1) / nthreads + 1;
 #endif

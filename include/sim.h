@@ -7,7 +7,7 @@
 #include <sys/mman.h>
 #include "timer.h"
 #include "common.h"
-#include "gem5/m5ops.h"
+// #include "gem5/m5ops.h"
 
 /*
 void *m5_mem = NULL;
@@ -32,15 +32,15 @@ inline void roi_begin() {
   //omp_set_num_threads(1);
   //map_m5_mem();
   printf("Begin of ROI\n");
-  m5_checkpoint(0,0);
-  m5_reset_stats(0,0);
+  // m5_checkpoint(0,0);
+  // m5_reset_stats(0,0);
 #endif
 }
 
 inline void roi_end() {
 #ifdef SIM
   //m5_dump_reset_stats(0,0);
-  m5_dump_stats(0,0);
+  // m5_dump_stats(0,0);
   printf("End of ROI\n");
   fflush(NULL);
 #endif

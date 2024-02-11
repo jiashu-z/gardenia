@@ -90,7 +90,7 @@ __forceinline__ __device__ T difference_set_bs(T* a, T size_a, T* b, T size_b, T
   //if (size_a == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
 
   if (thread_lane == 0) count[warp_lane] = 0;
   for (auto i = thread_lane; i < size_a; i += WARP_SIZE) {
@@ -113,7 +113,7 @@ __forceinline__ __device__ T difference_set_bs_cache(T* a, T size_a, T* b, T siz
   //if (size_a == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   __shared__ T cache[BLOCK_SIZE];
   cache[warp_lane * WARP_SIZE + thread_lane] = b[thread_lane * size_b / WARP_SIZE];
   __syncwarp();
@@ -145,7 +145,7 @@ __forceinline__ __device__ T difference_set_bs(T* a, T size_a, T* b, T size_b, T
   //if (size_a == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
 
   if (thread_lane == 0) count[warp_lane] = 0;
   for (auto i = thread_lane; i < size_a; i += WARP_SIZE) {
@@ -172,7 +172,7 @@ __forceinline__ __device__ T difference_set_bs_cache(T* a, T size_a, T* b, T siz
   //if (size_a == 0) return 0;
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  __shared__ T count[WARPS_PER_BLOCK];
+  __shared__ T count[_WARPS_PER_BLOCK];
   __shared__ T cache[BLOCK_SIZE];
   cache[warp_lane * WARP_SIZE + thread_lane] = b[thread_lane * size_b / WARP_SIZE];
   __syncwarp();
