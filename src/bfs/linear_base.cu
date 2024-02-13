@@ -5,6 +5,7 @@
 #include "worklistc.h"
 #include "cutil_subset.h"
 #include "cuda_launch_config.hpp"
+#include <iostream>
 
 __global__ void bfs_kernel(int m, const uint64_t *row_offsets, 
                            const IndexT *column_indices, 
@@ -32,6 +33,7 @@ __global__ void insert(int source, Worklist2 queue) {
 }
 
 void BFSSolver(Graph &g, int source, DistT *h_dists) {
+  cudaSetDevice(1);
   auto m = g.V();
   auto nnz = g.E();
   auto h_row_offsets = g.out_rowptr();
@@ -66,15 +68,22 @@ void BFSSolver(Graph &g, int source, DistT *h_dists) {
   do {
     ++ iter;
     nblocks = (nitems - 1) / nthreads + 1;
-    //printf("iteration %d: frontier_size = %d\n", iter, nitems);
+    std::cout << "iteration " << iter << ": frontier_size = " << nitems << std::endl;
     bfs_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, 
         d_dists, *in_frontier, *out_frontier);
-    CudaTest("solving bfs_kernel failed");
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+    // CudaTest("solving bfs_kernel failed");
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
     nitems = out_frontier->nitems();
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
     Worklist2 *tmp = in_frontier;
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
     in_frontier = out_frontier;
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
     out_frontier = tmp;
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
     out_frontier->reset();
+    std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
   } while (nitems > 0);
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
   t.Stop();
