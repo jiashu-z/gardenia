@@ -16,3 +16,7 @@ vecAdd/vecAdd
 color/color.txt
 
 test/out/*.out
+
+build
+.cache
+.vscode

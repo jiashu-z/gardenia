@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+service Task {
+    rpc InitTask (InitTaskArgs) returns (InitTaskReply) {}
+
+    rpc StartTask (StartTaskArgs) returns (StartTaskReply) {}
+
+    rpc PauseTask (PauseTaskArgs) returns (PauseTaskReply) {}
+
+    rpc StopTask (StopTaskArgs) returns (StopTaskReply) {}
+
+    rpc PreemptTask (PreemptTaskArgs) returns (PreemptTaskReply) {}
+}
+
+message InitTaskArgs {
+    int64 task_id = 1;
+}
+
+message InitTaskReply {
+    int64 status = 1;
+}
+
+message StartTaskArgs {
+    int64 task_id = 1;
+}
+
+message StartTaskReply {
+    int64 status = 1;
+}
+
+message PauseTaskArgs {
+    int64 task_id = 1;
+}
+
+message PauseTaskReply {
+    int64 status = 1;
+}
+
+message StopTaskArgs {
+    int64 task_id = 1;
+}
+
+message StopTaskReply {
+    int64 status = 1;
+}
+
+message PreemptTaskArgs {
+    int64 task_id = 1;
+}
+
+message PreemptTaskReply {
+    int64 status = 1;
+}

@@ -1,0 +1,10 @@
+CompileFlags:
+  Add:
+    - --cuda-gpu-arch=sm_86
+  Remove:
+    - -forward-unknown-to-host-compiler
+    - --generate-code*
+    - --options-file
+    - -rdc=true
+    - -Xcompiler=-fPIC
+    - -Xcompiler=-fvisibility=hidden
