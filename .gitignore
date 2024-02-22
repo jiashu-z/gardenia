@@ -20,3 +20,8 @@ test/out/*.out
 build
 .cache
 .vscode
+
+grpc
+src/CMakeFiles/
+src/_deps/
+datasets/
