@@ -1,22 +1,14 @@
 #include "bfs.h"
 #include <argparse/argparse.hpp>
+#include <iostream>
 #include "task.h"
 #include <thread>
 #include <unistd.h>
 #include <csignal>
-
-#include <iostream>
-#include <thread>
-
 #include <grpc/grpc.h>
 #include <grpcpp/channel.h>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
-
-#include <iostream>
-#include <string>
-
-
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
