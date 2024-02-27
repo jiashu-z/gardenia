@@ -250,7 +250,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
               out_frontier->reset();
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               CUDA_SAFE_CALL(cudaDeviceSynchronize());
-              if (item_num <= 0) {
+              if (false && item_num <= 0) {
                 // TODO: clean up.
                 goto BREAK_LOOP;
               }
