@@ -66,7 +66,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
 
     // Output the current time in microseconds
-    return double(microseconds);
+    return static_cast<double>(microseconds) / 1000000.0;
   }
 
   auto do_i_have_enough_time() -> bool {
@@ -141,7 +141,6 @@ class BfsLinearSideTask final : public BubbleBanditTask {
 
 
   void run() override {
-
     if (with_profiler_) {
       // TODO: You probably want to add some profiling logic here.
     }
@@ -175,33 +174,16 @@ class BfsLinearSideTask final : public BubbleBanditTask {
             init_event_ = false;
             cudaSetDevice(device_.at(5) - '0');
 
-            // auto m = g.V();
-            // auto nnz = g.E();
-            // auto h_row_offsets = g.out_rowptr();
-            // auto h_column_indices = g.out_colidx();	
-            // //print_device_info(0);
-            // uint64_t *d_row_offsets;
-            // VertexId *d_column_indices;
-
             CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)))
             CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)))
             CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice))
             CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice))
 
-            // DistT zero = 0;
-            // DistT * d_dists;
             CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)))
             CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice))
             CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice))
             CUDA_SAFE_CALL(cudaDeviceSynchronize())
 
-            // Worklist2 queue1(m);
-            // Worklist2 queue2(m);
-            // Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
-            // int iter = 0;
-            // int item_num = 1;
-            // int thread_num = BLOCK_SIZE;
-            // int block_num = (m - 1) / thread_num + 1;
             printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", thread_num);
 
             insert<<<1, thread_num>>>(source, *in_frontier);
@@ -244,19 +226,20 @@ class BfsLinearSideTask final : public BubbleBanditTask {
             std::cout << "State from RUNNING to CREATED" << std::endl;
           } else {
             if (!do_i_have_enough_time()) {
+              printf("I do not have enough time, current: %f, end: %f\n", get_current_time_in_micro(), end_time_.load());
               auto end_time = end_time_.load();
               if (end_time - get_current_time_in_micro() > 1000) {
                 usleep((end_time - get_current_time_in_micro()) / 1000);
               }
             } else {
               ++ iter;
-                block_num = (item_num - 1) / thread_num + 1;
+              block_num = (item_num - 1) / thread_num + 1;
               std::cout << "iteration " << iter << ": frontier_size = " << item_num << std::endl;
-              bfs_kernel <<<block_num, thread_num>>> (m, d_row_offsets, d_column_indices,
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              bfs_kernel<<<block_num, thread_num>>> (m, d_row_offsets, d_column_indices,
                                                       d_dists, *in_frontier, *out_frontier);
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
-              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
-                item_num = out_frontier->nitems();
+              item_num = out_frontier->nitems();
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               Worklist2 *tmp = in_frontier;
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
