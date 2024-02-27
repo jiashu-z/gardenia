@@ -5,14 +5,9 @@
 #include <thread>
 #include <unistd.h>
 #include <csignal>
-#include <grpc/grpc.h>
-#include <grpcpp/channel.h>
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
-#include <grpcpp/server_context.h>
 #include <atomic>
 #include "cutil_subset.h"
 #include "worklistc.h"
@@ -84,7 +79,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
   }
 
  public:
-  BfsLinearSideTask(int task_id, std::string name, std::string device, std::string scheduler_addr, bool with_profiler, 
+  BfsLinearSideTask(int task_id, std::string name, std::string device, std::string scheduler_addr, bool with_profiler,
   std::string file_type, std::string graph_prefix, std::string symmetrize, std::string reverse, std::string source_id) 
   : BubbleBanditTask(task_id, name, device, scheduler_addr) {
     with_profiler_ = with_profiler;
@@ -105,14 +100,14 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     end_time_ = 0.0;
   }
 
-  int64_t init(int64_t task_id) {
+  int64_t init(int64_t task_id) override {
     assert(task_id == task_id_);
     std::cout << "Init task " << task_id << std::endl;
     init_event_ = true;
     return 0;
   }
 
-  int64_t start(int64_t task_id, double end_time) {
+  int64_t start(int64_t task_id, double end_time) override {
     assert(task_id == task_id_);
     std::cout << "Start task " << task_id << " with end time " << end_time << std::endl;
     end_time_ = end_time;
@@ -120,14 +115,14 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     return 0;
   }
 
-  int64_t pause(int64_t task_id) {
+  int64_t pause(int64_t task_id) override {
     assert(task_id == task_id_);
     std::cout << "Pause task " << task_id << std::endl;
     pause_event_ = true;
     return 0;
   }
 
-  int64_t stop(int64_t task_id) {
+  int64_t stop(int64_t task_id) override {
     assert(task_id == task_id_);
     std::cout << "Stop task " << task_id << std::endl;
     stop_event_ = true;
@@ -137,7 +132,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     return 0;
   }
 
-  int64_t preempt(int64_t task_id) {
+  int64_t preempt(int64_t task_id) override {
     assert(task_id == task_id_);
     std::cout << "Preempt task " << task_id << std::endl;
     preempt_event_ = true;
@@ -145,7 +140,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
   }
 
 
-  void run() {
+  void run() override {
 
     if (with_profiler_) {
       // TODO: You probably want to add some profiling logic here.
@@ -169,9 +164,9 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     Worklist2 queue2(m);
     Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
     int iter = 0;
-    int nitems = 1;
-    int nthreads = BLOCK_SIZE;
-    int nblocks = (m - 1) / nthreads + 1;
+    int item_num = 1;
+    int thread_num = BLOCK_SIZE;
+    int block_num = (m - 1) / thread_num + 1;
 
     while (true) {
       switch (state) {
@@ -188,29 +183,29 @@ class BfsLinearSideTask final : public BubbleBanditTask {
             // uint64_t *d_row_offsets;
             // VertexId *d_column_indices;
 
-            CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
-            CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
-            CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
-            CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+            CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)))
+            CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)))
+            CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice))
+            CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice))
 
             // DistT zero = 0;
             // DistT * d_dists;
-            CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)));
-            CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice));
-            CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
-            CUDA_SAFE_CALL(cudaDeviceSynchronize());
+            CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)))
+            CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice))
+            CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice))
+            CUDA_SAFE_CALL(cudaDeviceSynchronize())
 
             // Worklist2 queue1(m);
             // Worklist2 queue2(m);
             // Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
             // int iter = 0;
-            // int nitems = 1;
-            // int nthreads = BLOCK_SIZE;
-            // int nblocks = (m - 1) / nthreads + 1;
-            printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", nthreads);
+            // int item_num = 1;
+            // int thread_num = BLOCK_SIZE;
+            // int block_num = (m - 1) / thread_num + 1;
+            printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", thread_num);
 
-            insert<<<1, nthreads>>>(source, *in_frontier);
-            nitems = in_frontier->nitems();
+            insert<<<1, thread_num>>>(source, *in_frontier);
+            item_num = in_frontier->nitems();
             state = BubbleBanditTask::State::PENDING;
             std::cout << "State from CREATED to PENDING" << std::endl;
           }
@@ -224,10 +219,10 @@ class BfsLinearSideTask final : public BubbleBanditTask {
           } else if (preempt_event_) {
             preempt_event_ = false;
             // TODO: Fully clear GPU memory.
-            CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost));
-            CUDA_SAFE_CALL(cudaFree(d_row_offsets));
-            CUDA_SAFE_CALL(cudaFree(d_column_indices));
-            CUDA_SAFE_CALL(cudaFree(d_dists));
+            CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost))
+            CUDA_SAFE_CALL(cudaFree(d_row_offsets))
+            CUDA_SAFE_CALL(cudaFree(d_column_indices))
+            CUDA_SAFE_CALL(cudaFree(d_dists))
 
             state = BubbleBanditTask::State::CREATED;
             std::cout << "State from PENDING to CREATED" << std::endl;
@@ -241,10 +236,10 @@ class BfsLinearSideTask final : public BubbleBanditTask {
             std::cout << "State from RUNNING to PENDING" << std::endl;
           } else if (preempt_event_) {
             preempt_event_ = false;
-            CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost));
-            CUDA_SAFE_CALL(cudaFree(d_row_offsets));
-            CUDA_SAFE_CALL(cudaFree(d_column_indices));
-            CUDA_SAFE_CALL(cudaFree(d_dists));
+            CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost))
+            CUDA_SAFE_CALL(cudaFree(d_row_offsets))
+            CUDA_SAFE_CALL(cudaFree(d_column_indices))
+            CUDA_SAFE_CALL(cudaFree(d_dists))
             state = BubbleBanditTask::State::CREATED;
             std::cout << "State from RUNNING to CREATED" << std::endl;
           } else {
@@ -255,13 +250,13 @@ class BfsLinearSideTask final : public BubbleBanditTask {
               }
             } else {
               ++ iter;
-              nblocks = (nitems - 1) / nthreads + 1;
-              std::cout << "iteration " << iter << ": frontier_size = " << nitems << std::endl;
-              bfs_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, 
-                  d_dists, *in_frontier, *out_frontier);
+                block_num = (item_num - 1) / thread_num + 1;
+              std::cout << "iteration " << iter << ": frontier_size = " << item_num << std::endl;
+              bfs_kernel <<<block_num, thread_num>>> (m, d_row_offsets, d_column_indices,
+                                                      d_dists, *in_frontier, *out_frontier);
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
-              nitems = out_frontier->nitems();
+                item_num = out_frontier->nitems();
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               Worklist2 *tmp = in_frontier;
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
@@ -272,15 +267,12 @@ class BfsLinearSideTask final : public BubbleBanditTask {
               out_frontier->reset();
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               CUDA_SAFE_CALL(cudaDeviceSynchronize());
-              if (nitems <= 0) {
+              if (item_num <= 0) {
                 // TODO: clean up.
                 goto BREAK_LOOP;
               }
             }
           }
-          break;
-        }
-        case BubbleBanditTask::State::SUBMITTED: {
           break;
         }
         default: {
@@ -300,15 +292,14 @@ BREAK_LOOP:
     if (stop_event_) {
       stop_event_ = false;
     } else {
-      // TODO: Jiashu: Add scheduler_client for finishing task.
       scheduler_client_.finish_task(task_id_);
     }
   }
 
-  void finish() {
+  void finish() override {
   }
 
-  void start_runner() {
+  void start_runner() override {
     std::cout << "Start runner of task " << task_id_ << std::endl;
     runner_ = std::thread([this] { run(); });
   }
@@ -375,7 +366,6 @@ int main(int argc, char **argv) {
   builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-  server_ptr = server.get();
   std::cout << "Server listening on " << addr << std::endl;
   task.start_runner();
   server->Wait();
