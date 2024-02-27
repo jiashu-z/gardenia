@@ -10,6 +10,7 @@
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 #include <cassert>
+#include "scheduler.h"
 
 class BubbleBanditTask {
  protected:
@@ -17,15 +18,17 @@ class BubbleBanditTask {
   const std::string name_;
   const std::string device_;
   const std::string scheduler_addr_;
+  const BubbleBanditSchedulerClient scheduler_client_;
 
  public:
   BubbleBanditTask(int64_t task_id, std::string name, std::string device, std::string scheduler_addr) : 
-  task_id_(task_id), name_(name), device_(device), scheduler_addr_(scheduler_addr) {
+  task_id_(task_id), name_(name), device_(device), scheduler_addr_(scheduler_addr), scheduler_client_(scheduler_addr) {
+
   }
 
   virtual int64_t init(int64_t task_id) = 0;
 
-  virtual int64_t start(int64_t task_id) = 0;
+  virtual int64_t start(int64_t task_id, double end_time) = 0;
 
   virtual int64_t pause(int64_t task_id) = 0;
 
@@ -66,7 +69,8 @@ class TaskServiceImpl final : public Task::Service {
 
   grpc::Status StartTask(grpc::ServerContext* context, const StartTaskArgs* request, StartTaskReply* response) override {
     auto task_id = request->task_id();
-    auto status = task_->start(task_id);
+    auto end_time = request->end_time();
+    auto status = task_->start(task_id, end_time);
     if (status == 0) {
       return grpc::Status::OK;
     } else {

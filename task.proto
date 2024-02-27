@@ -22,6 +22,7 @@ message InitTaskReply {
 
 message StartTaskArgs {
     int64 task_id = 1;
+    double end_time = 2;
 }
 
 message StartTaskReply {

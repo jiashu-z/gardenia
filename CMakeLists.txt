@@ -10,7 +10,7 @@ FetchContent_MakeAvailable(argparse)
 
 if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     set(CMAKE_CUDA_ARCHITECTURES 80)
-    set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+    set(CMAKE_CUDA_COMPILER nvcc)
 endif()
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
@@ -22,24 +22,32 @@ include(common.cmake)
 
 get_filename_component(task_proto "task.proto" ABSOLUTE)
 get_filename_component(task_proto_path "${task_proto}" PATH)
+get_filename_component(scheduler_proto "scheduler.proto" ABSOLUTE)
+get_filename_component(scheduler_proto_path "${scheduler_proto}" PATH)
 
 message("${task_proto}")
 message("${task_proto_path}")
+message("${scheduler_proto}")
+message("${scheduler_proto_path}")
 
 # Generated sources
 set(task_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/task.pb.cc")
 set(task_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/task.pb.h")
 set(task_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/task.grpc.pb.cc")
 set(task_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/task.grpc.pb.h")
+set(scheduler_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/scheduler.pb.cc")
+set(scheduler_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/scheduler.pb.h")
+set(scheduler_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/scheduler.grpc.pb.cc")
+set(scheduler_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/scheduler.grpc.pb.h")
 add_custom_command(
-      OUTPUT "${task_proto_srcs}" "${task_proto_hdrs}" "${task_grpc_srcs}" "${task_grpc_hdrs}"
+      OUTPUT "${task_proto_srcs}" "${task_proto_hdrs}" "${task_grpc_srcs}" "${task_grpc_hdrs}" "${scheduler_proto_srcs}" "${scheduler_proto_hdrs}" "${scheduler_grpc_srcs}" "${scheduler_grpc_hdrs}"
       COMMAND ${_PROTOBUF_PROTOC}
       ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
         --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
         -I "${task_proto_path}"
         --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
-        "${task_proto}"
-      DEPENDS "${task_proto}")
+        "${task_proto}" "${scheduler_proto}"
+      DEPENDS "${task_proto}" "${scheduler_proto}")
 
 # Include generated *.pb.h files
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
@@ -51,6 +59,17 @@ add_library(task_grpc_proto
   ${task_proto_srcs}
   ${task_proto_hdrs})
 target_link_libraries(task_grpc_proto
+  ${_REFLECTION}
+  ${_GRPC_GRPCPP}
+  ${_PROTOBUF_LIBPROTOBUF})
+
+# scheduler_grpc_proto
+add_library(scheduler_grpc_proto
+  ${scheduler_grpc_srcs}
+  ${scheduler_grpc_hdrs}
+  ${scheduler_proto_srcs}
+  ${scheduler_proto_hdrs})
+target_link_libraries(scheduler_grpc_proto
   ${_REFLECTION}
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF})
@@ -90,6 +109,7 @@ PRIVATE /usr/local/cuda/targets/x86_64-linux/include/cub
 target_link_libraries(bfs_side_task
 PRIVATE argparse
 PRIVATE task_grpc_proto
+PRIVATE scheduler_grpc_proto
 )
 
 # Targets task_(client|server)

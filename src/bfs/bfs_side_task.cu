@@ -16,6 +16,7 @@
 #include <atomic>
 #include "cutil_subset.h"
 #include "worklistc.h"
+#include <chrono>
 
 __global__ void insert(int source, Worklist2 queue) {
   int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -59,6 +60,28 @@ class BfsLinearSideTask final : public BubbleBanditTask {
   std::atomic<int64_t> ts0_;
   std::atomic<int64_t> ts1_;
   std::thread runner_;
+  double duration_;
+  std::atomic<double> end_time_;
+
+  auto get_current_time_in_micro() -> double {
+    // Get the current time point
+    auto now = std::chrono::high_resolution_clock::now();
+
+    // Convert time point to microseconds
+    auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+
+    // Output the current time in microseconds
+    return double(microseconds);
+  }
+
+  auto do_i_have_enough_time() -> bool {
+    // Get the current time in microseconds
+    auto current_time = get_current_time_in_micro();
+
+    // Check if the current time is less than the end time
+    return end_time_ - current_time > duration_;
+  
+  }
 
  public:
   BfsLinearSideTask(int task_id, std::string name, std::string device, std::string scheduler_addr, bool with_profiler, 
@@ -78,6 +101,8 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     counter_ = 0;
     ts0_ = 0;
     ts1_ = 0;
+    duration_ = 0.1;
+    end_time_ = 0.0;
   }
 
   int64_t init(int64_t task_id) {
@@ -87,9 +112,10 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     return 0;
   }
 
-  int64_t start(int64_t task_id) {
+  int64_t start(int64_t task_id, double end_time) {
     assert(task_id == task_id_);
-    std::cout << "Start task " << task_id << std::endl;
+    std::cout << "Start task " << task_id << " with end time " << end_time << std::endl;
+    end_time_ = end_time;
     start_event_ = true;
     return 0;
   }
@@ -117,7 +143,6 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     preempt_event_ = true;
     return 0;
   }
-
 
 
   void run() {
@@ -216,20 +241,19 @@ class BfsLinearSideTask final : public BubbleBanditTask {
             std::cout << "State from RUNNING to PENDING" << std::endl;
           } else if (preempt_event_) {
             preempt_event_ = false;
-            // TODO: Fully clear GPU memory.
             CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost));
             CUDA_SAFE_CALL(cudaFree(d_row_offsets));
             CUDA_SAFE_CALL(cudaFree(d_column_indices));
             CUDA_SAFE_CALL(cudaFree(d_dists));
-            // gpu_memory_to_cpu_memory();
             state = BubbleBanditTask::State::CREATED;
             std::cout << "State from RUNNING to CREATED" << std::endl;
           } else {
-            // TODO: The iterative logic. Do not forget the profiler.
-
-            insert<<<1, nthreads>>>(source, *in_frontier);
-            nitems = in_frontier->nitems();
-            do {
+            if (!do_i_have_enough_time()) {
+              auto end_time = end_time_.load();
+              if (end_time - get_current_time_in_micro() > 1000) {
+                usleep((end_time - get_current_time_in_micro()) / 1000);
+              }
+            } else {
               ++ iter;
               nblocks = (nitems - 1) / nthreads + 1;
               std::cout << "iteration " << iter << ": frontier_size = " << nitems << std::endl;
@@ -247,8 +271,12 @@ class BfsLinearSideTask final : public BubbleBanditTask {
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               out_frontier->reset();
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
-            } while (nitems > 0);
-            CUDA_SAFE_CALL(cudaDeviceSynchronize());
+              CUDA_SAFE_CALL(cudaDeviceSynchronize());
+              if (nitems <= 0) {
+                // TODO: clean up.
+                goto BREAK_LOOP;
+              }
+            }
           }
           break;
         }
@@ -264,6 +292,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
       }
       usleep(10000);
     }
+BREAK_LOOP:
 
     if (with_profiler_) {
       // TODO: You probably want to add some profiling logic here.
@@ -272,24 +301,16 @@ class BfsLinearSideTask final : public BubbleBanditTask {
       stop_event_ = false;
     } else {
       // TODO: Jiashu: Add scheduler_client for finishing task.
+      scheduler_client_.finish_task(task_id_);
     }
   }
 
   void finish() {
-    // TODO: Jiashu: Add scheduler_client for finishing task.
   }
 
   void start_runner() {
     std::cout << "Start runner of task " << task_id_ << std::endl;
     runner_ = std::thread([this] { run(); });
-  }
-
-  void cpu_memory_to_gpu_memory() {
-    // Implement this if you need to.
-  }
-
-  void gpu_memory_to_cpu_memory() {
-    // Implement this if you need to.
   }
 };
 
@@ -312,7 +333,8 @@ int main(int argc, char **argv) {
   program.add_argument("-i", "--task_id");
   program.add_argument("-d", "--device");
   program.add_argument("-a", "--addr");
-  program.add_argument("-p", "--profiler");
+  // TODO: Jiashu: Fix profiler flag
+  // program.add_argument("-p", "--profiler");
   program.add_argument("-t", "--file_type");
   program.add_argument("-g", "--graph_prefix");
   program.add_argument("--symmetrize");
@@ -333,7 +355,8 @@ int main(int argc, char **argv) {
   auto task_id = std::stoi(program.get<std::string>("--task_id"));
   auto device = program.get<std::string>("--device");
   auto addr = program.get<std::string>("--addr");
-  auto with_profiler = bool(std::stoi(program.get<std::string>("--profiler")));
+  // auto with_profiler = bool(std::stoi(program.get<std::string>("--profiler")));
+  auto with_profiler = false;
   auto file_type = program.get<std::string>("--file_type");
   auto graph_prefix = program.get<std::string>("--graph_prefix");
   auto symmetrize = program.get<std::string>("--symmetrize");
@@ -343,21 +366,21 @@ int main(int argc, char **argv) {
   auto task = BfsLinearSideTask(task_id, name, device, scheduler_addr, with_profiler, 
   file_type, graph_prefix, symmetrize, reverse, source_id);
 
-  task.init(task_id);
-  task.run();
-  task.stop(task_id);
-  // auto service = TaskServiceImpl(&task);
+  // task.init(task_id);
+  // task.run();
+  // task.stop(task_id);
+  auto service = TaskServiceImpl(&task);
 
-  // grpc::ServerBuilder builder;
-  // builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
-  // builder.RegisterService(&service);
-  // std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-  // server_ptr = server.get();
-  // std::cout << "Server listening on " << addr << std::endl;
-  // task.start_runner();
-  // server->Wait();
+  grpc::ServerBuilder builder;
+  builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
+  builder.RegisterService(&service);
+  std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+  server_ptr = server.get();
+  std::cout << "Server listening on " << addr << std::endl;
+  task.start_runner();
+  server->Wait();
 
-  // signal(SIGINT, signalHandler);
+  signal(SIGINT, signalHandler);
 
   return 0;
 }

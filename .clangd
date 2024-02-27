@@ -1,3 +1,10 @@
+If:
+  PathMatch: .*\.(cc|h)$
+CompileFlags:
+  Compiler: /usr/bin/c++
+
+---
+
 CompileFlags:
   Add:
     - --cuda-gpu-arch=sm_86

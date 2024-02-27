@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+service Scheduler {
+    rpc AddTaskRunner (AddTaskRunnerArgs) returns (AddTaskRunnerReply) {}
+
+    rpc AddTask (AddTaskArgs) returns (AddTaskReply) {}
+
+    rpc RemoveTask (RemoveTaskArgs) returns (RemoveTaskReply) {}
+
+    rpc FinishTask (FinishTaskArgs) returns (FinishTaskReply) {}
+
+    rpc AddBubble (AddBubbleArgs) returns (AddBubbleReply) {}
+
+    rpc ClearBubble (ClearBubbleArgs) returns (ClearBubbleReply) {}
+}
+
+message AddTaskRunnerArgs {
+    string device = 1;
+    string addr = 2;
+    int64 stage_id = 3;
+}
+
+message AddTaskRunnerReply {
+    int64 status = 1;
+    int64 id = 2;
+}
+
+message AddTaskArgs {
+    string name = 1;
+    string scheduler_addr = 2;
+    string cmd = 3;
+    int64 priority = 4;
+    int64 gpu_memory = 5;
+}
+
+message AddTaskReply {
+    int64 status = 1;
+    int64 task_id = 2;
+    string addr = 3;
+    string device_name = 4;
+}
+
+message RemoveTaskArgs {
+    int64 task_id = 1;
+}
+
+message RemoveTaskReply {
+    int64 status = 1;
+}
+
+message FinishTaskArgs {
+    int64 task_id = 1;
+}
+
+message FinishTaskReply {
+    int64 status = 1;
+}
+
+message AddBubbleArgs {
+    double start = 1;
+    double end = 2;
+    int64 stage_id = 3;
+    int64 global_rank = 4;
+    string device = 5;
+}
+
+message AddBubbleReply {
+    int64 status = 1;
+}
+
+message ClearBubbleArgs {
+    int64 stage_id = 1;
+    int64 global_rank = 2;
+    string device = 3;
+}
+
+message ClearBubbleReply {
+    int64 status = 1;
+}
