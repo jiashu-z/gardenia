@@ -23,6 +23,25 @@ __global__ void insert(int source, Worklist2 queue) {
   return;
 }
 
+__global__ void bfs_kernel(int m, const uint64_t *row_offsets, 
+                           const IndexT *column_indices, 
+                           DistT *dists, Worklist2 in_queue, 
+                           Worklist2 out_queue) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int src;
+	if (in_queue.pop_id(tid, src)) {
+		int row_begin = row_offsets[src];
+		int row_end = row_offsets[src+1];
+		for (int offset = row_begin; offset < row_end; ++ offset) {
+			int dst = column_indices[offset];
+			if ((dists[dst] == MYINFINITY) && 
+          (atomicCAS(&dists[dst], MYINFINITY, dists[src]+1) == MYINFINITY)) {
+				assert(out_queue.push(dst));
+			}
+		}
+	}
+}
+
 class BfsLinearSideTask final : public BubbleBanditTask {
  private:
   bool with_profiler_;
@@ -112,8 +131,22 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     std::vector<DistT> distances(m, MYINFINITY);
     auto h_dists = &distances[0];
 
-    load_into_main_memory();
     auto state = BubbleBanditTask::State::CREATED;
+
+    auto nnz = g.E();
+    auto h_row_offsets = g.out_rowptr();
+    auto h_column_indices = g.out_colidx();	
+    uint64_t *d_row_offsets;
+    VertexId *d_column_indices;
+    DistT zero = 0;
+    DistT * d_dists;
+    Worklist2 queue1(m);
+    Worklist2 queue2(m);
+    Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
+    int iter = 0;
+    int nitems = 1;
+    int nthreads = BLOCK_SIZE;
+    int nblocks = (m - 1) / nthreads + 1;
 
     while (true) {
       switch (state) {
@@ -121,32 +154,34 @@ class BfsLinearSideTask final : public BubbleBanditTask {
           if (init_event_) {
             init_event_ = false;
             cudaSetDevice(device_.at(5) - '0');
-            auto m = g.V();
-            auto nnz = g.E();
-            auto h_row_offsets = g.out_rowptr();
-            auto h_column_indices = g.out_colidx();	
-            //print_device_info(0);
-            uint64_t *d_row_offsets;
-            VertexId *d_column_indices;
+
+            // auto m = g.V();
+            // auto nnz = g.E();
+            // auto h_row_offsets = g.out_rowptr();
+            // auto h_column_indices = g.out_colidx();	
+            // //print_device_info(0);
+            // uint64_t *d_row_offsets;
+            // VertexId *d_column_indices;
+
             CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
             CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
             CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
             CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
 
-            DistT zero = 0;
-            DistT * d_dists;
+            // DistT zero = 0;
+            // DistT * d_dists;
             CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)));
             CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice));
             CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
             CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
-            Worklist2 queue1(m);
-            Worklist2 queue2(m);
-            Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
-            int iter = 0;
-            int nitems = 1;
-            int nthreads = BLOCK_SIZE;
-            int nblocks = (m - 1) / nthreads + 1;
+            // Worklist2 queue1(m);
+            // Worklist2 queue2(m);
+            // Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
+            // int iter = 0;
+            // int nitems = 1;
+            // int nthreads = BLOCK_SIZE;
+            // int nblocks = (m - 1) / nthreads + 1;
             printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", nthreads);
 
             insert<<<1, nthreads>>>(source, *in_frontier);
@@ -164,6 +199,11 @@ class BfsLinearSideTask final : public BubbleBanditTask {
           } else if (preempt_event_) {
             preempt_event_ = false;
             // TODO: Fully clear GPU memory.
+            CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+            CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+            CUDA_SAFE_CALL(cudaFree(d_column_indices));
+            CUDA_SAFE_CALL(cudaFree(d_dists));
+
             state = BubbleBanditTask::State::CREATED;
             std::cout << "State from PENDING to CREATED" << std::endl;
           }
@@ -177,11 +217,38 @@ class BfsLinearSideTask final : public BubbleBanditTask {
           } else if (preempt_event_) {
             preempt_event_ = false;
             // TODO: Fully clear GPU memory.
-            gpu_memory_to_cpu_memory();
+            CUDA_SAFE_CALL(cudaMemcpy(h_dists, d_dists, m * sizeof(DistT), cudaMemcpyDeviceToHost));
+            CUDA_SAFE_CALL(cudaFree(d_row_offsets));
+            CUDA_SAFE_CALL(cudaFree(d_column_indices));
+            CUDA_SAFE_CALL(cudaFree(d_dists));
+            // gpu_memory_to_cpu_memory();
             state = BubbleBanditTask::State::CREATED;
             std::cout << "State from RUNNING to CREATED" << std::endl;
           } else {
             // TODO: The iterative logic. Do not forget the profiler.
+
+            insert<<<1, nthreads>>>(source, *in_frontier);
+            nitems = in_frontier->nitems();
+            do {
+              ++ iter;
+              nblocks = (nitems - 1) / nthreads + 1;
+              std::cout << "iteration " << iter << ": frontier_size = " << nitems << std::endl;
+              bfs_kernel <<<nblocks, nthreads>>> (m, d_row_offsets, d_column_indices, 
+                  d_dists, *in_frontier, *out_frontier);
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              nitems = out_frontier->nitems();
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              Worklist2 *tmp = in_frontier;
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              in_frontier = out_frontier;
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              out_frontier = tmp;
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+              out_frontier->reset();
+              std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+            } while (nitems > 0);
+            CUDA_SAFE_CALL(cudaDeviceSynchronize());
           }
           break;
         }
@@ -217,10 +284,6 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     runner_ = std::thread([this] { run(); });
   }
 
-  void load_into_main_memory() {
-    // Implement this if you need to.
-  }
-
   void cpu_memory_to_gpu_memory() {
     // Implement this if you need to.
   }
@@ -254,7 +317,7 @@ int main(int argc, char **argv) {
   program.add_argument("-g", "--graph_prefix");
   program.add_argument("--symmetrize");
   program.add_argument("--reverse");
-  program.add_argument("--soruce_id");
+  program.add_argument("--source_id");
 
   try {
     program.parse_args(argc, argv);
@@ -279,18 +342,22 @@ int main(int argc, char **argv) {
 
   auto task = BfsLinearSideTask(task_id, name, device, scheduler_addr, with_profiler, 
   file_type, graph_prefix, symmetrize, reverse, source_id);
-  auto service = TaskServiceImpl(&task);
 
-  grpc::ServerBuilder builder;
-  builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
-  builder.RegisterService(&service);
-  std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-  server_ptr = server.get();
-  std::cout << "Server listening on " << addr << std::endl;
-  task.start_runner();
-  server->Wait();
+  task.init(task_id);
+  task.run();
+  task.stop(task_id);
+  // auto service = TaskServiceImpl(&task);
 
-  signal(SIGINT, signalHandler);
+  // grpc::ServerBuilder builder;
+  // builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
+  // builder.RegisterService(&service);
+  // std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+  // server_ptr = server.get();
+  // std::cout << "Server listening on " << addr << std::endl;
+  // task.start_runner();
+  // server->Wait();
+
+  // signal(SIGINT, signalHandler);
 
   return 0;
 }
