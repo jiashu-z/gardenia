@@ -26,6 +26,17 @@ class BubbleBanditTask {
 
   }
 
+  auto get_current_time_in_micro() -> double {
+    // Get the current time point
+    auto now = std::chrono::high_resolution_clock::now();
+
+    // Convert time point to microseconds
+    auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+
+    // Output the current time in microseconds
+    return static_cast<double>(microseconds) / 1000000.0;
+  }
+
   virtual int64_t init(int64_t task_id) = 0;
 
   virtual int64_t start(int64_t task_id, double end_time) = 0;
