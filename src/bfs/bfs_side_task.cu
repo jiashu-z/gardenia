@@ -234,10 +234,10 @@ class BfsLinearSideTask final : public BubbleBanditTask {
               bfs_kernel<<<block_num, thread_num>>> (m, d_row_offsets, d_column_indices,
                                                       d_dists, *in_frontier, *out_frontier);
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
-              CUDA_SAFE_CALL(cudaDeviceSynchronize());
+//              CUDA_SAFE_CALL(cudaDeviceSynchronize())
               item_num = out_frontier->nitems();
               std::cout << "New frontier_size = " << item_num << std::endl;
-              CUDA_SAFE_CALL(cudaDeviceSynchronize());
+//              CUDA_SAFE_CALL(cudaDeviceSynchronize())
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               Worklist2 *tmp = in_frontier;
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
@@ -247,7 +247,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
               out_frontier->reset();
               std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
-              CUDA_SAFE_CALL(cudaDeviceSynchronize());
+//              CUDA_SAFE_CALL(cudaDeviceSynchronize())
               if (item_num <= 0) {
                 // TODO: clean up.
                 goto BREAK_LOOP;
