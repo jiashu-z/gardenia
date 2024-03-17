@@ -27,3 +27,4 @@ src/_deps/
 datasets/
 
 .idea
+**/cmake-build-debug

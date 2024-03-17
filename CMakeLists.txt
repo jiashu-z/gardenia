@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
+set(CMAKE_CUDA_ARCHITECTURES 80)
+set(CMAKE_CUDA_COMPILER /home/jiashu/env/miniconda3/envs/bubblebandit/bin/nvcc)
 project(cmake_template VERSION 0.1.0 LANGUAGES CXX CUDA)
 
 include(FetchContent)
@@ -8,14 +10,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(argparse)
 
-if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 80)
-    set(CMAKE_CUDA_COMPILER nvcc)
-endif()
+#if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+#endif()
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(Protobuf_DIR "/home/jiashu/env/grpc/lib/cmake/protobuf")
 include(common.cmake)
 
 # message("${CMAKE_CURRENT_BINARY_DIR}")
@@ -92,7 +93,7 @@ CUDA_SEPARABLE_COMPILATION ON
 )
 target_include_directories(bfs_linear_base
 PRIVATE include
-PRIVATE /usr/local/cuda/targets/x86_64-linux/include/cub
+PRIVATE /home/jiashu/env/miniconda3/envs/bubblebandit/include/cub
 )
 
 add_executable(bfs_side_task
@@ -104,9 +105,42 @@ CUDA_SEPARABLE_COMPILATION ON
 )
 target_include_directories(bfs_side_task
 PRIVATE include
-PRIVATE /usr/local/cuda/targets/x86_64-linux/include/cub
+PRIVATE /home/jiashu/env/miniconda3/envs/bubblebandit/include/cub
 )
 target_link_libraries(bfs_side_task
+PRIVATE argparse
+PRIVATE task_grpc_proto
+PRIVATE scheduler_grpc_proto
+)
+
+add_executable(pr_side_task
+src/pr/pr_side_task.cu
+src/pr/verifier.cc
+)
+set_target_properties(pr_side_task PROPERTIES
+CUDA_SEPARABLE_COMPILATION ON
+)
+target_include_directories(pr_side_task
+PRIVATE include
+PRIVATE /home/jiashu/env/miniconda3/envs/bubblebandit/include/cub
+)
+target_link_libraries(pr_side_task
+PRIVATE argparse
+PRIVATE task_grpc_proto
+PRIVATE scheduler_grpc_proto
+)
+
+add_executable(sgd_side_task
+src/sgd/sgd_side_task.cu
+)
+set_target_properties(sgd_side_task PROPERTIES
+CUDA_SEPARABLE_COMPILATION ON
+)
+target_include_directories(sgd_side_task
+PRIVATE include
+PRIVATE /home/jiashu/env/miniconda3/envs/bubblebandit/include/cub
+)
+target_link_libraries(sgd_side_task
 PRIVATE argparse
 PRIVATE task_grpc_proto
 PRIVATE scheduler_grpc_proto
