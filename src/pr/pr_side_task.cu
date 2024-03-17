@@ -107,7 +107,7 @@ class PrSideTask final : public BubbleBanditTask {
     auto device = device_.at(5) - '0';
     printf("CUDA:%d\n", device);
     cudaSetDevice(device);
-    g_ptr = new Graph(graph_prefix_, file_type_, std::stoi(symmetrize_));
+    g_ptr = new Graph(graph_prefix_, file_type_, std::stoi(symmetrize_), 1);
     auto &g = *g_ptr;
     m = g.V();
     nnz = g.E();
@@ -131,24 +131,37 @@ class PrSideTask final : public BubbleBanditTask {
   }
 
   auto created_to_paused() -> void override {
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
     CUDA_SAFE_CALL(cudaMalloc((void **) &d_row_offsets, (m + 1) * sizeof(uint64_t)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
     CUDA_SAFE_CALL(cudaMalloc((void **) &d_column_indices, nnz * sizeof(VertexId)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    printf("Size of d_row_offsets: %ld\n", (m + 1) * sizeof(uint64_t));
     CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets,
                               h_row_offsets,
                               (m + 1) * sizeof(uint64_t),
                               cudaMemcpyHostToDevice))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
     CUDA_SAFE_CALL(cudaMemcpy(d_column_indices,
                               h_column_indices,
                               nnz * sizeof(VertexId),
                               cudaMemcpyHostToDevice))
 
-    CUDA_SAFE_CALL(cudaMalloc((void **) &d_degrees, m * sizeof(int)));
-    CUDA_SAFE_CALL(cudaMemcpy(d_degrees, &degrees[0], m * sizeof(int), cudaMemcpyHostToDevice));
-    CUDA_SAFE_CALL(cudaMalloc((void **) &d_scores, m * sizeof(ScoreT)));
-    CUDA_SAFE_CALL(cudaMalloc((void **) &d_sums, m * sizeof(ScoreT)));
-    CUDA_SAFE_CALL(cudaMalloc((void **) &d_contrib, m * sizeof(ScoreT)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_degrees, m * sizeof(int)))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMemcpy(d_degrees, &degrees[0], m * sizeof(int), cudaMemcpyHostToDevice))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_scores, m * sizeof(ScoreT)))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_sums, m * sizeof(ScoreT)))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_contrib, m * sizeof(ScoreT)))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
     CUDA_SAFE_CALL(cudaMemcpy(d_scores, scores, m * sizeof(ScoreT), cudaMemcpyHostToDevice));
-    CUDA_SAFE_CALL(cudaMalloc((void **) &d_diff, sizeof(float)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_diff, sizeof(float)))
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   }
 
   auto paused_to_running() -> void override {
@@ -220,6 +233,7 @@ int main(int argc, char **argv) {
   program.add_argument("-g", "--graph_prefix");
   program.add_argument("--symmetrize");
   program.add_argument("--max_iter");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   try {
     program.parse_args(argc, argv);
   } catch (const std::runtime_error &err) {
@@ -227,20 +241,32 @@ int main(int argc, char **argv) {
     std::cout << program;
     return 1;
   }
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
   auto name = program.get<std::string>("--name");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto scheduler_addr = program.get<std::string>("--scheduler_addr");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto task_id = std::stoi(program.get<std::string>("--task_id"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto device = program.get<std::string>("--device");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto addr = program.get<std::string>("--addr");
-  auto profiler_level = program.get<int>("--profiler_level");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto profiler_level = std::stoi(program.get<std::string>("--profiler_level"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto file_type = program.get<std::string>("--file_type");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto graph_prefix = program.get<std::string>("--graph_prefix");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto symmetrize = program.get<std::string>("--symmetrize");
-  auto max_iter = program.get<int>("--max_iter");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto max_iter = std::stoi(program.get<std::string>("--max_iter"));
 
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto task =
       PrSideTask(task_id, name, device, scheduler_addr, profiler_level, file_type, graph_prefix, symmetrize, max_iter);
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
   auto service = TaskServiceImpl(&task);
   grpc::ServerBuilder builder;

@@ -175,11 +175,17 @@ class BubbleBanditTask {
         }
         case PAUSED: {
           if (start_event_) {
+            std::cout << __FILE__ << ":" << __LINE__ << std::endl;
             start_event_ = false;
+            std::cout << __FILE__ << ":" << __LINE__ << std::endl;
             record_time("PAUSED_TO_RUNNING_START");
+            std::cout << __FILE__ << ":" << __LINE__ << std::endl;
             paused_to_running();
+            std::cout << __FILE__ << ":" << __LINE__ << std::endl;
             state_ = RUNNING;
+            std::cout << __FILE__ << ":" << __LINE__ << std::endl;
             record_time("PAUSED_TO_RUNNING_END");
+            std::cout << __FILE__ << ":" << __LINE__ << std::endl;
             printf("State from PAUSED to RUNNING\n");
           }
           break;
@@ -280,7 +286,9 @@ class TaskServiceImpl final : public Task::Service {
                          StartTaskReply *response) override {
     auto task_id = request->task_id();
     auto end_time = request->end_time();
+    printf("StartTask task_id: %ld, end_time: %f\n", task_id, end_time);
     auto status = task_->start(task_id, end_time);
+    printf("StartTask task_id: %ld, end_time: %f, status: %ld\n", task_id, end_time, status);
     if (status == 0) {
       return grpc::Status::OK;
     } else {
