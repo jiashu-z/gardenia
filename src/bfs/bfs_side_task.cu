@@ -58,9 +58,29 @@ class BfsLinearSideTask final : public BubbleBanditTask {
   double duration_;
   std::atomic<double> end_time_;
 
+  Graph *g_ptr;
+  VertexId m;
+  size_t nnz;
+  uint64_t *h_row_offsets;
+  VertexId *h_column_indices;
+  uint64_t *d_row_offsets;
+  VertexId *d_column_indices;
+  std::vector<DistT> h_dists;
+
+  int iter;
+  int item_num;
+  int thread_num;
+  int block_num;
+  Worklist2 queue1;
+  Worklist2 queue2;
+  Worklist2 *in_frontier, *out_frontier;
+
+  DistT zero = 0;
+  DistT * d_dists;
 
 
-  auto do_i_have_enough_time() -> bool {
+
+    auto do_i_have_enough_time() -> bool {
     // Get the current time in microseconds
     auto current_time = get_current_time_in_micro();
 
@@ -129,63 +149,66 @@ class BfsLinearSideTask final : public BubbleBanditTask {
     preempt_event_ = true;
     return 0;
   }
+  
 
-
-  void run() override {
+  auto submitted_to_created() -> void override {
     auto device = device_.at(5) - '0';
     std::cout << "Device: " << device << std::endl;
     cudaSetDevice(device);
-    if (with_profiler_) {
-      // TODO: You probably want to add some profiling logic here.
-    }
-    Graph g(graph_prefix_, file_type_, std::stoi(symmetrize_), std::stoi(reverse_));
+    g_ptr = new Graph(graph_prefix_, file_type_, std::stoi(symmetrize_), 1);
+    auto &g = *g_ptr;
+    
     int source = std::stoi(source_id_);
-    auto m = g.V();
+    m = g.V();
     std::vector<DistT> distances(m, MYINFINITY);
-    auto h_dists = &distances[0];
-
-    auto state = BubbleBanditTask::State::CREATED;
-
-    auto nnz = g.E();
-    auto h_row_offsets = g.out_rowptr();
-    auto h_column_indices = g.out_colidx();	
-    uint64_t *d_row_offsets;
-    VertexId *d_column_indices;
-    DistT zero = 0;
-    DistT * d_dists;
+    h_dists = &distances[0];
+    
+    state_ = BubbleBanditTask::State::CREATED;
+    
+    nnz = g.E();
+    h_row_offsets = g.out_rowptr();
+    h_column_indices = g.out_colidx();
+    
+    *d_row_offsets;
+    *d_column_indices;
+    zero = 0;
     std::cout << "Max size: " << m << std::endl;
-    Worklist2 queue1(m);
-    Worklist2 queue2(m);
-    Worklist2 *in_frontier = &queue1, *out_frontier = &queue2;
-    int iter = 0;
-    int item_num = 1;
-    int thread_num = BLOCK_SIZE;
-    int block_num = (m - 1) / thread_num + 1;
+    queue1 = Worklist2(m);
+    queue2 = WorkList2(m);
+    *in_frontier = &queue1, *out_frontier = &queue2;
+    iter = 0;
+    item_num = 1;
+    thread_num = BLOCK_SIZE;
+    block_num = (m - 1) / thread_num + 1;
+    printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", thread_num);
+  }
+  
+  auto created_to_paused() -> void override {
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
-    while (true) {
-      switch (state) {
-        case BubbleBanditTask::State::CREATED: {
-          if (init_event_) {
-            init_event_ = false;
-
-            CUDA_SAFE_CALL(cudaMalloc((void **)&d_row_offsets, (m + 1) * sizeof(uint64_t)))
-            CUDA_SAFE_CALL(cudaMalloc((void **)&d_column_indices, nnz * sizeof(VertexId)))
-            CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (m + 1) * sizeof(uint64_t), cudaMemcpyHostToDevice))
-            CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(VertexId), cudaMemcpyHostToDevice))
-
-            CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)))
-            CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice))
-            CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice))
-            CUDA_SAFE_CALL(cudaDeviceSynchronize())
-
-            printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", thread_num);
-
-            insert<<<1, thread_num>>>(source, *in_frontier);
-//              insert<<<1, thread_num>>>(source, in_frontier->d_index, in_frontier->d_size, in_frontier->d_queue);
-            item_num = in_frontier->nitems();
-            state = BubbleBanditTask::State::PENDING;
-            std::cout << "State from CREATED to PENDING" << std::endl;
-          }
+    CUDA_SAFE_CALL(cudaMalloc((void **)&d_dists, m * sizeof(DistT)));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMemcpy(d_dists, h_dists, m * sizeof(DistT), cudaMemcpyHostToDevice));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaMemcpy(&d_dists[source], &zero, sizeof(zero), cudaMemcpyHostToDevice));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    insert<<<1, thread_num>>>(source, *in_frontier);
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    item_num = in_frontier->nitems();
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    state = BubbleBanditTask::State::PENDING;
+  }
           break;
         }
         case BubbleBanditTask::State::PENDING: {
