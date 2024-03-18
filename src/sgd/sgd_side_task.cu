@@ -12,7 +12,7 @@
 #include "graph_io.h"
 #include "common.h"
 #include <random>
-#include <iostream>
+#include "cutil_subset.h"
 
 #define K (20)
 
@@ -144,61 +144,49 @@ __global__ void rmse(int m, ScoreT *squared_errors, ScoreT *total_error) {
 
 class SgdSideTask final : public BubbleBanditTask {
  private:
-  bool with_profiler_;
-  ::std::string file_name_;
+  std::string file_name_;
   double lambda_;
   double step_;
-  int max_iters_;
+  int max_iter_;
   double epsilon_;
-  ::std::atomic<bool> init_event_;
-  ::std::atomic<bool> start_event_;
-  ::std::atomic<bool> pause_event_;
-  ::std::atomic<bool> stop_event_;
-  ::std::atomic<bool> preempt_event_;
-  ::std::atomic<int> counter_;
-  ::std::atomic<int64_t> ts0_;
-  ::std::atomic<int64_t> ts1_;
-  ::std::thread runner_;
-  double duration_;
-  ::std::atomic<double> end_time_;
 
-  auto do_i_have_enough_time() -> bool {
-    // Get the current time in microseconds
-    auto current_time = get_current_time_in_micro();
+  int m, n, nnz, *h_row_offsets = nullptr, *h_column_indices = nullptr, *h_degree = nullptr;
+  WeightT *h_weight = nullptr;
 
-    // Check if the current time is less than the end time
-    return end_time_ - current_time > duration_;
+  int *d_row_offsets, *d_column_indices;
 
-  }
+  LatentT *h_user_lv;
+  LatentT *h_item_lv;
+  LatentT *lv_u;
+  LatentT *lv_i;
+  ScoreT *h_rating;
+  int *ordering;
+  std::atomic<int> iter;
 
+  int nthreads;
+  int nblocks;
+  ScoreT *d_rating;
+  int *d_ordering;
+  LatentT *d_user_lv, *d_item_lv;
+  ScoreT h_error, *d_error, *squared_errors;
  public:
   SgdSideTask(int task_id,
               std::string name,
               std::string device,
               std::string scheduler_addr,
-              bool with_profiler,
+              int profiler_level,
               std::string file_name,
-              std::string lambda,
-              std::string step,
-              std::string max_iters,
-              std::string epsilon)
-      : BubbleBanditTask(task_id, name, device, scheduler_addr) {
-    with_profiler_ = with_profiler;
+              double lambda,
+              double step,
+              int max_iter,
+              double epsilon)
+      : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level) {
     file_name_ = file_name;
-    lambda_ = std::stof(lambda);
-    step_ = std::stof(step);
-    max_iters_ = std::stod(max_iters);
-    epsilon_ = std::stof(epsilon);
-    init_event_ = false;
-    start_event_ = false;
-    pause_event_ = false;
-    stop_event_ = false;
-    preempt_event_ = false;
-    counter_ = 0;
-    ts0_ = 0;
-    ts1_ = 0;
+    lambda_ = lambda;
+    step_ = step;
+    max_iter_ = max_iter;
+    epsilon_ = epsilon;
     duration_ = 0.1;
-    end_time_ = 0.0;
   }
 
   int64_t init(int64_t task_id) override {
@@ -240,16 +228,11 @@ class SgdSideTask final : public BubbleBanditTask {
     return 0;
   }
 
-  void run() override {
+  auto submitted_to_created() -> void override {
     auto device = device_.at(5) - '0';
     std::cout << "Device: " << device << std::endl;
     cudaSetDevice(device);
-    if (with_profiler_) {
-      // TODO: You probably want to add some profiling logic here.
-    }
 
-    int m, n, nnz, *h_row_offsets = NULL, *h_column_indices = NULL, *h_degree = NULL;
-    WeightT *h_weight = NULL;
     read_graph_from_file_name(file_name_,
                               m,
                               n,
@@ -266,102 +249,119 @@ class SgdSideTask final : public BubbleBanditTask {
 
     printf("num_users=%d, num_items=%d\n", m, n);
     printf("regularization_factor=%f, learning_rate=%f\n", lambda_, step_);
-    printf("max_iters=%d, epsilon=%f\n", max_iters_, epsilon_);
+    printf("max_iter=%d, epsilon=%f\n", max_iter_, epsilon_);
 
-    LatentT *h_user_lv = (LatentT *) malloc(m * K * sizeof(LatentT));
-    LatentT *h_item_lv = (LatentT *) malloc(n * K * sizeof(LatentT));
-    LatentT *lv_u = (LatentT *) malloc(m * K * sizeof(LatentT));
-    LatentT *lv_i = (LatentT *) malloc(n * K * sizeof(LatentT));
-    ScoreT *h_rating = (ScoreT *) malloc(nnz * sizeof(ScoreT));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    h_user_lv = (LatentT *) malloc(m * K * sizeof(LatentT));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    h_item_lv = (LatentT *) malloc(n * K * sizeof(LatentT));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    lv_u = (LatentT *) malloc(m * K * sizeof(LatentT));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    lv_i = (LatentT *) malloc(n * K * sizeof(LatentT));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    h_rating = (ScoreT *) malloc(nnz * sizeof(ScoreT));
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
     Initialize(m, lv_u);
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
     Initialize(n, lv_i);
-    for (int i = 0; i < m * K; i++) h_user_lv[i] = lv_u[i];
-    for (int i = 0; i < n * K; i++) h_item_lv[i] = lv_i[i];
-    for (int i = 0; i < nnz; i++) h_rating[i] = (ScoreT) h_weight[i];
-    int *ordering = NULL;
-
-    auto state = BubbleBanditTask::State::CREATED;
-    while (true) {
-      switch (state) {
-        case BubbleBanditTask::State::CREATED: {
-          if (init_event_) {
-            init_event_ = false;
-
-            state = BubbleBanditTask::State::PENDING;
-            std::cout << "State from CREATED to PENDING" << std::endl;
-          }
-          break;
-        }
-        case BubbleBanditTask::State::PENDING: {
-          if (start_event_) {
-            start_event_ = false;
-            state = BubbleBanditTask::State::RUNNING;
-            std::cout << "State from PENDING to RUNNING" << std::endl;
-          } else if (preempt_event_) {
-            preempt_event_ = false;
-            // TODO: Fully clear GPU memory.
-
-            state = BubbleBanditTask::State::CREATED;
-            std::cout << "State from PENDING to CREATED" << std::endl;
-          }
-          break;
-        }
-        case BubbleBanditTask::State::RUNNING: {
-          if (pause_event_) {
-            pause_event_ = false;
-            state = BubbleBanditTask::State::PENDING;
-            std::cout << "State from RUNNING to PENDING" << std::endl;
-          } else if (preempt_event_) {
-            preempt_event_ = false;
-
-            state = BubbleBanditTask::State::CREATED;
-            std::cout << "State from RUNNING to CREATED" << std::endl;
-          } else {
-            if (!do_i_have_enough_time()) {
-              printf("I do not have enough time, current: %f, end: %f\n",
-                     get_current_time_in_micro(),
-                     end_time_.load());
-              auto end_time = end_time_.load();
-              if (end_time - get_current_time_in_micro() > 1000) {
-                usleep((end_time - get_current_time_in_micro()) / 1000);
-              }
-            } else {
-              if (true) {
-                // TODO: clean up.
-                goto BREAK_LOOP;
-              }
-            }
-          }
-          break;
-        }
-        default: {
-          assert(false);
-        }
-      }
-      if (stop_event_) {
-        break;
-      }
-      usleep(10000);
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    for (int i = 0; i < m * K; i++) {
+      h_user_lv[i] = lv_u[i];
     }
-    BREAK_LOOP:
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    for (int i = 0; i < n * K; i++) {
+      h_item_lv[i] = lv_i[i];
+    }
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    for (int i = 0; i < nnz; i++) {
+      h_rating[i] = (ScoreT) h_weight[i];
+    }
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+    ordering = nullptr;
+    std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
-    if (with_profiler_) {
-      // TODO: You probably want to add some profiling logic here.
-    }
-    if (stop_event_) {
-      stop_event_ = false;
-    } else {
-      scheduler_client_.finish_task(task_id_);
-    }
   }
 
-  void finish() override {
+  auto created_to_paused() -> void override {
+
+    auto &num_users = m;
+    auto &num_items = n;
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_row_offsets, (num_users + 1) * sizeof(int)))
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_column_indices, nnz * sizeof(int)))
+    CUDA_SAFE_CALL(cudaMemcpy(d_row_offsets, h_row_offsets, (num_users + 1) * sizeof(int), cudaMemcpyHostToDevice))
+    CUDA_SAFE_CALL(cudaMemcpy(d_column_indices, h_column_indices, nnz * sizeof(int), cudaMemcpyHostToDevice))
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_rating, nnz * sizeof(ScoreT)))
+    CUDA_SAFE_CALL(cudaMemcpy(d_rating, h_rating, nnz * sizeof(ScoreT), cudaMemcpyHostToDevice))
+    //CUDA_SAFE_CALL(cudaMalloc((void **)&d_ordering, num_users * sizeof(int)));
+    //CUDA_SAFE_CALL(cudaMemcpy(d_ordering, h_ordering, num_users * sizeof(int), cudaMemcpyHostToDevice));
+
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_user_lv, num_users * K * sizeof(LatentT)))
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_item_lv, num_items * K * sizeof(LatentT)))
+    CUDA_SAFE_CALL(cudaMemcpy(d_user_lv, h_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyHostToDevice))
+    CUDA_SAFE_CALL(cudaMemcpy(d_item_lv, h_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyHostToDevice))
+    CUDA_SAFE_CALL(cudaMalloc((void **) &d_error, sizeof(ScoreT)))
+    CUDA_SAFE_CALL(cudaMalloc((void **) &squared_errors, num_users * sizeof(ScoreT)))
+    CUDA_SAFE_CALL(cudaMemset(d_error, 0, sizeof(ScoreT)))
+
+    iter = 0;
+    nthreads = BLOCK_SIZE;
+    nblocks = (num_users - 1) / nthreads + 1;
+    printf("Launching CUDA SGD solver (%d CTAs, %d threads/CTA) ...\n", nblocks, nthreads);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize())
+
   }
 
-  void start_runner() override {
-    std::cout << "Start runner of task " << task_id_ << std::endl;
-    runner_ = std::thread([this] { run(); });
+  auto paused_to_running() -> void override {
+  }
+
+  auto running_to_paused() -> void override {
+  }
+
+  auto running_to_finished() -> void override {
+  }
+
+  auto to_stopped() -> void override {
+    std::string out_file_name = name_ + "_" + std::to_string(task_id_) + "_side_task.txt";
+    std::ofstream out_file(out_file_name);
+    assert(out_file.is_open());
+    out_file << iter;
+    out_file.flush();
+    out_file.close();
+  }
+
+  auto is_finished() -> bool override {
+    return iter >= max_iter_ || h_error <= epsilon_;
+  }
+
+  auto step() -> void override {
+    ++iter;
+    h_error = 0.0;
+    auto &num_users = m;
+    auto &num_items = n;
+    CUDA_SAFE_CALL(cudaMemset(squared_errors, 0, num_users * sizeof(ScoreT)));
+    CUDA_SAFE_CALL(cudaMemcpy(d_error, &h_error, sizeof(ScoreT), cudaMemcpyHostToDevice));
+    update<<<nblocks, nthreads>>>(num_users,
+                                  num_items,
+                                  d_row_offsets,
+                                  d_column_indices,
+                                  d_rating,
+                                  d_user_lv,
+                                  d_item_lv,
+                                  lambda_,
+                                  step_,
+                                  d_ordering,
+                                  squared_errors);
+    CudaTest("solving kernel update failed");
+    rmse<<<nblocks, nthreads>>>(num_users, squared_errors, d_error);
+    CudaTest("solving kernel rmse failed");
+    CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
+    //printf("h_error=%f\n", h_error);
+    printf("iteration %d: RMSE error = %f\n", iter.load(), sqrt(h_error / nnz));
+    //CUDA_SAFE_CALL(cudaMemcpy(h_user_lv, d_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
+    //CUDA_SAFE_CALL(cudaMemcpy(h_item_lv, d_item_lv, num_items * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
+    //print_latent_vector(num_users, num_items, h_user_lv, h_item_lv);
   }
 };
 
@@ -378,21 +378,18 @@ void signalHandler(int signum) {
 }
 
 int main(int argc, char **argv) {
-  argparse::ArgumentParser program("program_name");
-
-  auto name = program.get<std::string>("--name");
-  auto scheduler_addr = program.get<std::string>("--scheduler_addr");
-  auto task_id = std::stoi(program.get<std::string>("--task_id"));
-  auto device = program.get<std::string>("--device");
-  auto addr = program.get<std::string>("--addr");
-  // auto with_profiler = bool(std::stoi(program.get<std::string>("--profiler")));
-  auto with_profiler = false;
-  auto file_name = program.get<std::string>("--file_name");
-  auto lambda = program.get<std::string>("--lambda");
-  auto step = program.get<std::string>("--step");
-  auto max_iters = program.get<std::string>("--max_iters");
-  auto epsilon = program.get<std::string>("--epsilon");
-
+  argparse::ArgumentParser program("sgd_side_task");
+  program.add_argument("-n", "--name");
+  program.add_argument("-s", "--scheduler_addr");
+  program.add_argument("-i", "--task_id");
+  program.add_argument("-d", "--device");
+  program.add_argument("-a", "--addr");
+  program.add_argument("--profiler_level");
+  program.add_argument("--graph_file");
+  program.add_argument("--lambda");
+  program.add_argument("--step");
+  program.add_argument("--max_iter");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   try {
     program.parse_args(argc, argv);
   }
@@ -402,12 +399,33 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  auto task = SgdSideTask(task_id, name, device, scheduler_addr, with_profiler,
-                          file_name, lambda, step, max_iters, epsilon);
+  auto name = program.get<std::string>("--name");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto scheduler_addr = program.get<std::string>("--scheduler_addr");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto task_id = std::stoi(program.get<std::string>("--task_id"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto device = program.get<std::string>("--device");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto addr = program.get<std::string>("--addr");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto profiler_level = std::stoi(program.get<std::string>("--profiler_level"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto file_name = program.get<std::string>("--file_name");
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto lambda = std::stof(program.get<std::string>("--lambda"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto step = std::stof(program.get<std::string>("--step"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto max_iter = std::stoi(program.get<std::string>("--max_iter"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto epsilon = std::stof(program.get<std::string>("--epsilon"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
-  // task.init(task_id);
-  // task.run();
-  // task.stop(task_id);
+  auto task = SgdSideTask(task_id, name, device, scheduler_addr, profiler_level,
+                          file_name, lambda, step, max_iter, epsilon);
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+
   auto service = TaskServiceImpl(&task);
 
   grpc::ServerBuilder builder;
