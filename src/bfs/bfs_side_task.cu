@@ -65,16 +65,6 @@ private:
     
     DistT zero = 0;
     DistT *d_dists;
-    
-    
-    auto do_i_have_enough_time() -> bool {
-      // Get the current time in microseconds
-      auto current_time = get_current_time_in_micro();
-      
-      // Check if the current time is less than the end time
-      return end_time_ - current_time > duration_;
-      
-    }
 
 public:
     BfsLinearSideTask(int task_id, std::string name, std::string device, std::string scheduler_addr, int profiler_level,
