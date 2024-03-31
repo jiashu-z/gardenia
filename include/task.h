@@ -11,11 +11,14 @@
 #include <grpcpp/security/credentials.h>
 #include <cassert>
 #include "scheduler.h"
+#include <string>
 #include <thread>
 #include <cassert>
 #include <map>
+#include <unistd.h>
 #include <vector>
 #include <fstream>
+#include <signal.h>
 
 class BubbleBanditTask {
  protected:
@@ -85,6 +88,7 @@ class BubbleBanditTask {
     if (time_records_.find(action) != time_records_.end()) {
       time_records_[action].push_back(get_current_time_in_micro());
     } else {
+      printf("Creating new action %s\n", action.c_str());
       auto v = std::vector<double>();
       v.push_back(get_current_time_in_micro());
       time_records_.insert(std::make_pair(action, v));
@@ -137,6 +141,8 @@ class BubbleBanditTask {
     assert(task_id == task_id_);
     printf("Stop task %ld\n", task_id_);
     stop_event_ = true;
+    runner_.join();
+    kill(getpid(), SIGINT);
     return 0;
   }
 
@@ -230,6 +236,7 @@ class BubbleBanditTask {
         state_ = STOPPED;
         record_time("TO_STOPPED_END");
         printf("State to STOPPED\n");
+        goto LOOP_END;
       }
       usleep(1000);
     }
@@ -237,7 +244,9 @@ class BubbleBanditTask {
     LOOP_END:
 
     std::ofstream out_file;
-    std::string out_file_name = name_ + "_time_profile.txt";
+    std::string out_file_name = name_ + "_time_profile_" + std::to_string(task_id_) + "_.txt";
+    out_file.precision(9);
+    out_file << std::fixed;
     out_file.open(out_file_name);
     assert(out_file.is_open());
     for (auto &kv : time_records_) {
@@ -255,6 +264,8 @@ class BubbleBanditTask {
     } else {
       finish();
     }
+
+    printf("Task %ld finished\n", task_id_);
   }
 
   virtual void start_runner() {

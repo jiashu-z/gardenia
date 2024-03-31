@@ -179,14 +179,15 @@ class SgdSideTask final : public BubbleBanditTask {
               double lambda,
               double step,
               int max_iter,
-              double epsilon)
+              double epsilon,
+              double duration)
       : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level) {
     file_name_ = file_name;
     lambda_ = lambda;
     step_ = step;
     max_iter_ = max_iter;
     epsilon_ = epsilon;
-    duration_ = 0.1;
+    duration_ = duration;
   }
 
   int64_t init(int64_t task_id) override {
@@ -332,7 +333,8 @@ class SgdSideTask final : public BubbleBanditTask {
   }
 
   auto is_finished() -> bool override {
-    return iter >= max_iter_ || h_error <= epsilon_;
+    return max_iter_ != 0 && iter >= max_iter_;
+    // return iter >= max_iter_ || h_error <= epsilon_;
   }
 
   auto step() -> void override {
@@ -367,14 +369,16 @@ class SgdSideTask final : public BubbleBanditTask {
 
 grpc::Server *server_ptr;
 
-void signalHandler(int signum) {
-  std::cout << "Interrupt signal (" << signum << ") received.\n";
+void signal_handler(int signum) {
+  printf("Received signal %d\n", signum);
 
   // cleanup and close up stuff here
   // terminate program
+  sleep(1);
   server_ptr->Shutdown();
+  printf("Exit task\n");
 
-  exit(signum);
+  exit(0);
 }
 
 int main(int argc, char **argv) {
@@ -384,11 +388,13 @@ int main(int argc, char **argv) {
   program.add_argument("-i", "--task_id");
   program.add_argument("-d", "--device");
   program.add_argument("-a", "--addr");
+  program.add_argument("--duration");
   program.add_argument("--profiler_level");
   program.add_argument("--graph_file");
   program.add_argument("--lambda");
   program.add_argument("--step");
   program.add_argument("--max_iter");
+  program.add_argument("--epsilon");
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   try {
     program.parse_args(argc, argv);
@@ -409,25 +415,27 @@ int main(int argc, char **argv) {
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto addr = program.get<std::string>("--addr");
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto duration = std::stod(program.get<std::string>("--duration"));
   auto profiler_level = std::stoi(program.get<std::string>("--profiler_level"));
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-  auto file_name = program.get<std::string>("--file_name");
+  auto file_name = program.get<std::string>("--graph_file");
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-  auto lambda = std::stof(program.get<std::string>("--lambda"));
+  auto lambda = std::stod(program.get<std::string>("--lambda"));
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-  auto step = std::stof(program.get<std::string>("--step"));
+  auto step = std::stod(program.get<std::string>("--step"));
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto max_iter = std::stoi(program.get<std::string>("--max_iter"));
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-  auto epsilon = std::stof(program.get<std::string>("--epsilon"));
+  auto epsilon = std::stod(program.get<std::string>("--epsilon"));
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
   auto task = SgdSideTask(task_id, name, device, scheduler_addr, profiler_level,
-                          file_name, lambda, step, max_iter, epsilon);
+                          file_name, lambda, step, max_iter, epsilon, duration);
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
-  auto service = TaskServiceImpl(&task);
+  signal(SIGINT, signal_handler);
 
+  auto service = TaskServiceImpl(&task);
   grpc::ServerBuilder builder;
   builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
@@ -436,7 +444,6 @@ int main(int argc, char **argv) {
   task.start_runner();
   server->Wait();
 
-  signal(SIGINT, signalHandler);
 
   return 0;
 }

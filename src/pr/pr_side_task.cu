@@ -191,7 +191,7 @@ class PrSideTask final : public BubbleBanditTask {
   }
 
   auto is_finished() -> bool override {
-    return iter >= max_iter_;
+    return max_iter_ != 0 && iter >= max_iter_;
   }
 
   auto step() -> void override {
@@ -212,13 +212,15 @@ class PrSideTask final : public BubbleBanditTask {
 grpc::Server *server_ptr;
 
 void signal_handler(int signum) {
-  std::cout << "Interrupt signal (" << signum << ") received.\n";
+  printf("Received signal %d\n", signum);
 
   // cleanup and close up stuff here
   // terminate program
+  sleep(1);
   server_ptr->Shutdown();
+  printf("Exit task\n");
 
-  exit(signum);
+  exit(0);
 }
 
 int main(int argc, char **argv) {
@@ -268,6 +270,8 @@ int main(int argc, char **argv) {
       PrSideTask(task_id, name, device, scheduler_addr, profiler_level, file_type, graph_prefix, symmetrize, max_iter);
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
+  signal(SIGINT, signal_handler);
+
   auto service = TaskServiceImpl(&task);
   grpc::ServerBuilder builder;
   builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
@@ -276,8 +280,6 @@ int main(int argc, char **argv) {
   std::cout << "Server listening on " << addr << std::endl;
   task.start_runner();
   server->Wait();
-
-  signal(SIGINT, signal_handler);
 
   return 0;
 }

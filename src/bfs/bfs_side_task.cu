@@ -183,12 +183,12 @@ class BfsLinearSideTask final : public BubbleBanditTask {
             insert<<<1, thread_num>>>(source, *in_frontier);
 //              insert<<<1, thread_num>>>(source, in_frontier->d_index, in_frontier->d_size, in_frontier->d_queue);
             item_num = in_frontier->nitems();
-            state = BubbleBanditTask::State::PENDING;
+            state = BubbleBanditTask::State::PAUSED;
             std::cout << "State from CREATED to PENDING" << std::endl;
           }
           break;
         }
-        case BubbleBanditTask::State::PENDING: {
+        case BubbleBanditTask::State::PAUSED: {
           if (start_event_) {
             start_event_ = false;
             state = BubbleBanditTask::State::RUNNING;
@@ -209,7 +209,7 @@ class BfsLinearSideTask final : public BubbleBanditTask {
         case BubbleBanditTask::State::RUNNING: {
           if (pause_event_) {
             pause_event_ = false;
-            state = BubbleBanditTask::State::PENDING;
+            state = BubbleBanditTask::State::PAUSED;
             std::cout << "State from RUNNING to PENDING" << std::endl;
           } else if (preempt_event_) {
             preempt_event_ = false;
