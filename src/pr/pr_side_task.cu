@@ -91,6 +91,7 @@ class PrSideTask final : public BubbleBanditTask {
              std::string name,
              std::string device,
              std::string scheduler_addr,
+             double duration,
              int profiler_level,
              std::string file_type,
              std::string graph_prefix,
@@ -100,12 +101,12 @@ class PrSideTask final : public BubbleBanditTask {
     graph_prefix_ = graph_prefix;
     symmetrize_ = symmetrize;
     max_iter_ = max_iter;
-    duration_ = 0.1;
+    duration_ = duration;
   }
 
   auto submitted_to_created() -> void override {
     auto device = device_.at(5) - '0';
-    printf("CUDA:%d\n", device);
+    printf("device_: %s, CUDA:%d\n", device_.c_str(), device);
     cudaSetDevice(device);
     g_ptr = new Graph(graph_prefix_, file_type_, std::stoi(symmetrize_), 1);
     auto &g = *g_ptr;
@@ -230,6 +231,7 @@ int main(int argc, char **argv) {
   program.add_argument("-i", "--task_id");
   program.add_argument("-d", "--device");
   program.add_argument("-a", "--addr");
+  program.add_argument("--duration");
   program.add_argument("--profiler_level");
   program.add_argument("-t", "--file_type");
   program.add_argument("-g", "--graph_prefix");
@@ -255,6 +257,8 @@ int main(int argc, char **argv) {
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto addr = program.get<std::string>("--addr");
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
+  auto duration = std::stod(program.get<std::string>("--duration"));
+  std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto profiler_level = std::stoi(program.get<std::string>("--profiler_level"));
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto file_type = program.get<std::string>("--file_type");
@@ -267,7 +271,7 @@ int main(int argc, char **argv) {
 
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
   auto task =
-      PrSideTask(task_id, name, device, scheduler_addr, profiler_level, file_type, graph_prefix, symmetrize, max_iter);
+      PrSideTask(task_id, name, device, scheduler_addr, duration, profiler_level, file_type, graph_prefix, symmetrize, max_iter);
   std::cout << __FILE__ << ":" << __LINE__ << std::endl;
 
   signal(SIGINT, signal_handler);

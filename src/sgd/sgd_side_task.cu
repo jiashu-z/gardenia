@@ -359,6 +359,7 @@ class SgdSideTask final : public BubbleBanditTask {
     rmse<<<nblocks, nthreads>>>(num_users, squared_errors, d_error);
     CudaTest("solving kernel rmse failed");
     CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
+    cudaDeviceSynchronize();
     //printf("h_error=%f\n", h_error);
     printf("iteration %d: RMSE error = %f\n", iter.load(), sqrt(h_error / nnz));
     //CUDA_SAFE_CALL(cudaMemcpy(h_user_lv, d_user_lv, num_users * K * sizeof(LatentT), cudaMemcpyDeviceToHost));
