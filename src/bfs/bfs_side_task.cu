@@ -72,7 +72,7 @@ public:
     BfsLinearSideTask(int64_t task_id, std::string name, std::string device, std::string scheduler_addr, int profiler_level,
                       std::string file_type, std::string graph_prefix, std::string symmetrize, std::string reverse,
                       std::string source_id)
-            : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level) {
+            : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level), queue1(0), queue2(0) {
       file_type_ = file_type;
       graph_prefix_ = graph_prefix;
       symmetrize_ = symmetrize;
