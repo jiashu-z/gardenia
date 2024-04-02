@@ -53,25 +53,26 @@ private:
     VertexId *h_column_indices;
     uint64_t *d_row_offsets;
     VertexId *d_column_indices;
-    std::vector<DistT> h_dists;
+    DistT *h_dists;
     
     int iter;
     int item_num;
     int thread_num;
     int block_num;
+    int source;
     Worklist2 queue1;
     Worklist2 queue2;
-    Worklist2 *in_frontier, *out_frontier;
+    Worklist2 *in_frontier;
+    Worklist2 *out_frontier;
     
     DistT zero = 0;
     DistT *d_dists;
 
 public:
-    BfsLinearSideTask(int task_id, std::string name, std::string device, std::string scheduler_addr, int profiler_level,
+    BfsLinearSideTask(int64_t task_id, std::string name, std::string device, std::string scheduler_addr, int profiler_level,
                       std::string file_type, std::string graph_prefix, std::string symmetrize, std::string reverse,
                       std::string source_id)
             : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level) {
-      with_profiler_ = with_profiler;
       file_type_ = file_type;
       graph_prefix_ = graph_prefix;
       symmetrize_ = symmetrize;
@@ -86,7 +87,7 @@ public:
       g_ptr = new Graph(graph_prefix_, file_type_, std::stoi(symmetrize_), 1);
       auto &g = *g_ptr;
       
-      int source = std::stoi(source_id_);
+      source = std::stoi(source_id_);
       m = g.V();
       std::vector<DistT> distances(m, MYINFINITY);
       h_dists = &distances[0];
@@ -97,13 +98,14 @@ public:
       h_row_offsets = g.out_rowptr();
       h_column_indices = g.out_colidx();
       
-      *d_row_offsets;
-      *d_column_indices;
       zero = 0;
       std::cout << "Max size: " << m << std::endl;
       queue1 = Worklist2(m);
-      queue2 = WorkList2(m);
-      *in_frontier = &queue1, *out_frontier = &queue2;
+      queue2 = Worklist2(m);
+
+      in_frontier = &queue1;
+      out_frontier = &queue2;
+
       iter = 0;
       item_num = 1;
       thread_num = BLOCK_SIZE;
@@ -135,7 +137,6 @@ public:
       std::cout << __FILE__ << ":" << __LINE__ << std::endl;
       item_num = in_frontier->nitems();
       std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-      state = BubbleBanditTask::State::PENDING;
     }
     
     auto step() -> void override {
@@ -184,6 +185,19 @@ public:
     
     auto running_to_finished() -> void override {
     }
+
+    auto to_stopped() -> void override {
+      std::string out_file_name = name_ + "_" + std::to_string(task_id_) + "_side_task.txt";
+      std::ofstream out_file(out_file_name);
+      assert(out_file.is_open());
+      out_file << iter;
+      out_file.flush();
+      out_file.close();
+    }
+
+    auto is_finished() -> bool override {
+    }
+
 };
 
 grpc::Server *server_ptr;
@@ -226,7 +240,7 @@ int main(int argc, char **argv) {
   auto scheduler_addr = program.get<std::string>("--scheduler_addr");
   auto task_id = std::stoi(program.get<std::string>("--task_id"));
   auto device = program.get<std::string>("--device");
-  auto addr = program.get<std::stoi>("--addr");
+  auto addr = program.get<std::string>("--addr");
   auto profiler_level = std::stoi(program.get<std::string>("--profiler_level"));
   auto file_type = program.get<std::string>("--file_type");
   auto graph_prefix = program.get<std::string>("--graph_prefix");
