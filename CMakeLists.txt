@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 set(CMAKE_CUDA_ARCHITECTURES 80)
-set(CMAKE_CUDA_COMPILER /home/molly/env/miniconda3/envs/bubblebandit/bin/nvcc)
+set(CMAKE_CUDA_COMPILER $ENV{HOME}/env/miniconda3/envs/bubblebandit/bin/nvcc)
 project(cmake_template VERSION 0.1.0 LANGUAGES CXX CUDA)
 
 include(FetchContent)
@@ -16,7 +16,7 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(Protobuf_DIR "/home/molly/env/grpc/lib/cmake/protobuf")
+set(Protobuf_DIR "$ENV{HOME}/env/grpc/lib/cmake/protobuf")
 include(common.cmake)
 
 # message("${CMAKE_CURRENT_BINARY_DIR}")
@@ -93,7 +93,6 @@ CUDA_SEPARABLE_COMPILATION ON
 )
 target_include_directories(bfs_linear_base
 PRIVATE include
-PRIVATE /home/molly/env/miniconda3/envs/bubblebandit/include/cub
 )
 
 add_executable(bfs_side_task
@@ -105,7 +104,7 @@ CUDA_SEPARABLE_COMPILATION ON
 )
 target_include_directories(bfs_side_task
 PRIVATE include
-PRIVATE /home/molly/env/miniconda3/envs/bubblebandit/include/cub
+PRIVATE $ENV{HOME}/env/miniconda3/envs/bubblebandit/include/cub
 )
 target_link_libraries(bfs_side_task
 PRIVATE argparse
@@ -122,7 +121,7 @@ CUDA_SEPARABLE_COMPILATION ON
 )
 target_include_directories(pr_side_task
 PRIVATE include
-PRIVATE /home/molly/env/miniconda3/envs/bubblebandit/include/cub
+PRIVATE $ENV{HOME}/env/miniconda3/envs/bubblebandit/include/cub
 )
 target_link_libraries(pr_side_task
 PRIVATE argparse
@@ -138,7 +137,7 @@ CUDA_SEPARABLE_COMPILATION ON
 )
 target_include_directories(sgd_side_task
 PRIVATE include
-PRIVATE /home/molly/env/miniconda3/envs/bubblebandit/include/cub
+PRIVATE $ENV{HOME}/env/miniconda3/envs/bubblebandit/include/cub
 )
 target_link_libraries(sgd_side_task
 PRIVATE argparse
