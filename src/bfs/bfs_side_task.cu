@@ -69,7 +69,7 @@ private:
     DistT *d_dists;
 
 public:
-    BfsLinearSideTask(int64_t task_id, std::string name, std::string device, std::string scheduler_addr, int profiler_level,
+    BfsLinearSideTask(int64_t task_id, std::string name, std::string device, std::string scheduler_addr, double duration, int profiler_level,
                       std::string file_type, std::string graph_prefix, std::string symmetrize, std::string reverse,
                       std::string source_id)
             : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level), queue1(0), queue2(0) {
@@ -78,6 +78,7 @@ public:
       symmetrize_ = symmetrize;
       reverse_ = reverse;
       source_id_ = source_id;
+      duration_ = duration;
     }
     
     auto submitted_to_created() -> void override {
@@ -219,6 +220,7 @@ int main(int argc, char **argv) {
   program.add_argument("-i", "--task_id");
   program.add_argument("-d", "--device");
   program.add_argument("-a", "--addr");
+  program.add_argument("--duration");
   // TODO: Jiashu: Fix profiler flag
   program.add_argument("-p", "--profiler_level");
   program.add_argument("-t", "--file_type");
@@ -241,6 +243,7 @@ int main(int argc, char **argv) {
   auto task_id = std::stoi(program.get<std::string>("--task_id"));
   auto device = program.get<std::string>("--device");
   auto addr = program.get<std::string>("--addr");
+  auto duration = std::stod(program.get<std::string>("--duration"));
   auto profiler_level = std::stoi(program.get<std::string>("--profiler_level"));
   auto file_type = program.get<std::string>("--file_type");
   auto graph_prefix = program.get<std::string>("--graph_prefix");
@@ -248,7 +251,7 @@ int main(int argc, char **argv) {
   auto reverse = program.get<std::string>("--reverse");
   auto source_id = program.get<std::string>("--source_id");
   
-  auto task = BfsLinearSideTask(task_id, name, device, scheduler_addr, profiler_level,
+  auto task = BfsLinearSideTask(task_id, name, device, scheduler_addr, duration, profiler_level,
                                 file_type, graph_prefix, symmetrize, reverse, source_id);
   
   // task.init(task_id);
