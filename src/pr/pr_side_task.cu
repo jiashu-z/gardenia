@@ -200,11 +200,12 @@ class PrSideTask final : public BubbleBanditTask {
     h_diff = 0;
     CUDA_SAFE_CALL(cudaMemcpy(d_diff, &h_diff, sizeof(float), cudaMemcpyHostToDevice));
     contrib <<<nblocks, nthreads>>>(m, d_scores, d_degrees, d_contrib);
-    CudaTest("solving kernel contrib failed");
+    // CudaTest("solving kernel contrib failed");
     pull_step<<<nblocks, nthreads>>>(m, d_row_offsets, d_column_indices, d_sums, d_contrib);
     l1norm<<<nblocks, nthreads>>>(m, d_scores, d_sums, d_diff, base_score);
-    CudaTest("solving kernel pull failed");
+    // CudaTest("solving kernel pull failed");
     CUDA_SAFE_CALL(cudaMemcpy(&h_diff, d_diff, sizeof(float), cudaMemcpyDeviceToHost));
+    cudaDeviceSynchronize();
     printf(" %2d    %f\n", iter.load(), h_diff);
   }
 

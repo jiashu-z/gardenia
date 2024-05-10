@@ -355,9 +355,9 @@ class SgdSideTask final : public BubbleBanditTask {
                                   step_,
                                   d_ordering,
                                   squared_errors);
-    CudaTest("solving kernel update failed");
+    // CudaTest("solving kernel update failed");
     rmse<<<nblocks, nthreads>>>(num_users, squared_errors, d_error);
-    CudaTest("solving kernel rmse failed");
+    // CudaTest("solving kernel rmse failed");
     CUDA_SAFE_CALL(cudaMemcpy(&h_error, d_error, sizeof(ScoreT), cudaMemcpyDeviceToHost));
     cudaDeviceSynchronize();
     //printf("h_error=%f\n", h_error);

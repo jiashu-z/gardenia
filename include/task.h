@@ -67,12 +67,6 @@ class BubbleBanditTask {
 
   virtual auto step() -> void = 0;
 
-  auto do_i_have_enough_time() -> bool {
-    auto current_time = get_current_time_in_micro();
-
-    return end_time_ - current_time > duration_;
-  }
-
   auto get_current_time_in_micro() -> double {
     // Get the current time point
     auto now = std::chrono::high_resolution_clock::now();
@@ -82,6 +76,12 @@ class BubbleBanditTask {
 
     // Output the current time in microseconds
     return static_cast<double>(microseconds) / 1000000.0;
+  }
+
+  auto do_i_have_enough_time() -> bool {
+    auto current_time = get_current_time_in_micro();
+
+    return end_time_ - current_time > duration_;
   }
 
   auto record_time(const std::string &action) -> void {
@@ -218,11 +218,11 @@ class BubbleBanditTask {
             step();
             record_time("RUNNING_STEP_END");
           } else {
-            record_time("RUNNING_STEP_START");
+            record_time("SLEEPING_STEP_START");
             if (end_time_.load() - get_current_time_in_micro() > 0.001) {
-              usleep(end_time_.load() - get_current_time_in_micro());
+              usleep((end_time_.load() - get_current_time_in_micro()) * 1000000);
             }
-            record_time("RUNNING_STEP_END");
+            record_time("SLEEPING_STEP_END");
           }
           break;
         }
@@ -238,13 +238,13 @@ class BubbleBanditTask {
         printf("State to STOPPED\n");
         goto LOOP_END;
       }
-      usleep(1000);
+      usleep(10000);
     }
 
     LOOP_END:
 
     std::ofstream out_file;
-    std::string out_file_name = name_ + "_time_profile_" + std::to_string(task_id_) + "_.txt";
+    std::string out_file_name = name_ + "_time_profile_" + std::to_string(task_id_) + ".txt";
     out_file.precision(9);
     out_file << std::fixed;
     out_file.open(out_file_name);
