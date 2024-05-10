@@ -45,6 +45,7 @@ private:
     std::string symmetrize_;
     std::string reverse_;
     std::string source_id_;
+    int max_iter_;
     
     Graph *g_ptr;
     VertexId m;
@@ -71,7 +72,7 @@ private:
 public:
     BfsLinearSideTask(int64_t task_id, std::string name, std::string device, std::string scheduler_addr, double duration, int profiler_level,
                       std::string file_type, std::string graph_prefix, std::string symmetrize, std::string reverse,
-                      std::string source_id)
+                      std::string source_id, int max_iter)
             : BubbleBanditTask(task_id, name, device, scheduler_addr, profiler_level), queue1(0), queue2(0) {
       file_type_ = file_type;
       graph_prefix_ = graph_prefix;
@@ -79,6 +80,7 @@ public:
       reverse_ = reverse;
       source_id_ = source_id;
       duration_ = duration;
+      max_iter_ = max_iter;
     }
     
     auto submitted_to_created() -> void override {
@@ -93,7 +95,6 @@ public:
       std::vector<DistT> distances(m, MYINFINITY);
       h_dists = &distances[0];
       
-      state_ = BubbleBanditTask::State::CREATED;
       
       nnz = g.E();
       h_row_offsets = g.out_rowptr();
@@ -111,7 +112,13 @@ public:
       item_num = 1;
       thread_num = BLOCK_SIZE;
       block_num = (m - 1) / thread_num + 1;
+      
+      insert<<<1, thread_num>>>(source, *in_frontier);
+      item_num = in_frontier->nitems();
+
       printf("Launching CUDA BFS solver (%d threads/CTA) ...\n", thread_num);
+
+      state_ = BubbleBanditTask::State::CREATED;
     }
     
     auto created_to_paused() -> void override {
@@ -134,48 +141,62 @@ public:
       std::cout << __FILE__ << ":" << __LINE__ << std::endl;
       CUDA_SAFE_CALL(cudaDeviceSynchronize());
       std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-      insert<<<1, thread_num>>>(source, *in_frontier);
-      std::cout << __FILE__ << ":" << __LINE__ << std::endl;
-      item_num = in_frontier->nitems();
-      std::cout << __FILE__ << ":" << __LINE__ << std::endl;
     }
     
     auto step() -> void override {
-      ++iter;
+      ++ iter;
       block_num = (item_num - 1) / thread_num + 1;
-      std::cout << "iteration " << iter << ": frontier_size = " << item_num <<
-                std::endl;
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
-      bfs_kernel<<<block_num, thread_num>>>(m, d_row_offsets, d_column_indices,
-                                            d_dists, *in_frontier, *out_frontier
-      );
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
-//              CUDA_SAFE_CALL(cudaDeviceSynchronize())
+      std::cout << "iteration " << iter << ": frontier_size = " << item_num << std::endl;
+      bfs_kernel <<<block_num, thread_num>>> (m, d_row_offsets, d_column_indices, 
+          d_dists, *in_frontier, *out_frontier);
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+      // CudaTest("solving bfs_kernel failed");
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
       item_num = out_frontier->nitems();
-      // PRINT ITEM NUM
-      std::cout << "ITEM_NUM = " << item_num << std::endl;
-      std::cout << "New frontier_size = " << item_num <<
-                std::endl;
-//              CUDA_SAFE_CALL(cudaDeviceSynchronize())
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
       Worklist2 *tmp = in_frontier;
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
       in_frontier = out_frontier;
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
       out_frontier = tmp;
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
-      out_frontier->
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+      out_frontier->reset();
+      std::cout << __FILE__ << ": "<< __LINE__ << std::endl;
+//       ++iter;
+//       block_num = (item_num - 1) / thread_num + 1;
+//       std::cout << "iteration " << iter << ": frontier_size = " << item_num <<
+//                 std::endl;
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
+//       bfs_kernel<<<block_num, thread_num>>>(m, d_row_offsets, d_column_indices,
+//                                             d_dists, *in_frontier, *out_frontier
+//       );
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
+// //              CUDA_SAFE_CALL(cudaDeviceSynchronize())
+//       item_num = out_frontier->nitems();
+//       // PRINT ITEM NUM
+//       std::cout << "ITEM_NUM = " << item_num << std::endl;
+//       std::cout << "New frontier_size = " << item_num <<
+//                 std::endl;
+// //              CUDA_SAFE_CALL(cudaDeviceSynchronize())
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
+//       Worklist2 *tmp = in_frontier;
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
+//       in_frontier = out_frontier;
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
+//       out_frontier = tmp;
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
+//       out_frontier->
               
-              reset();
+//               reset();
       
-      std::cout << __FILE__ << ": " << __LINE__ <<
-                std::endl;
+//       std::cout << __FILE__ << ": " << __LINE__ <<
+//                 std::endl;
     }
     
     auto paused_to_running() -> void override {
@@ -196,21 +217,24 @@ public:
       out_file.close();
     }
 
-    auto is_finished() -> bool override {
-    }
+  auto is_finished() -> bool override {
+    return max_iter_ != 0 && iter >= max_iter_;
+  }
 
 };
 
 grpc::Server *server_ptr;
 
-void signalHandler(int signum) {
-  std::cout << "Interrupt signal (" << signum << ") received.\n";
-  
+void signal_handler(int signum) {
+  printf("Received signal %d\n", signum);
+
   // cleanup and close up stuff here
   // terminate program
+  sleep(1);
   server_ptr->Shutdown();
-  
-  exit(signum);
+  printf("Exit task\n");
+
+  exit(0);
 }
 
 int main(int argc, char **argv) {
@@ -228,6 +252,7 @@ int main(int argc, char **argv) {
   program.add_argument("--symmetrize");
   program.add_argument("--reverse");
   program.add_argument("--source_id");
+  program.add_argument("--max_iter");
   
   try {
     program.parse_args(argc, argv);
@@ -250,13 +275,15 @@ int main(int argc, char **argv) {
   auto symmetrize = program.get<std::string>("--symmetrize");
   auto reverse = program.get<std::string>("--reverse");
   auto source_id = program.get<std::string>("--source_id");
+  auto max_iter = std::stoi(program.get<std::string>("--max_iter"));
   
   auto task = BfsLinearSideTask(task_id, name, device, scheduler_addr, duration, profiler_level,
-                                file_type, graph_prefix, symmetrize, reverse, source_id);
+                                file_type, graph_prefix, symmetrize, reverse, source_id, max_iter);
   
   // task.init(task_id);
   // task.run();
   // task.stop(task_id);
+  signal(SIGINT, signal_handler);
   auto service = TaskServiceImpl(&task);
   
   grpc::ServerBuilder builder;
@@ -266,8 +293,6 @@ int main(int argc, char **argv) {
   std::cout << "Server listening on " << addr << std::endl;
   task.start_runner();
   server->Wait();
-  
-  signal(SIGINT, signalHandler);
   
   return 0;
 }
